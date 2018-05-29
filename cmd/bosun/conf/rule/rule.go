@@ -659,6 +659,9 @@ func (c *Conf) GetFuncs(backends conf.EnabledBackends) map[string]eparse.Func {
 	if backends.Annotate {
 		merge(expr.Annotate)
 	}
+	if backends.CloudWatch {
+		merge(expr.CloudWatch)
+	}
 	return funcs
 }
 

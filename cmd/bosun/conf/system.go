@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"time"
 
+	"bosun.org/cloudwatch"
 	"bosun.org/cmd/bosun/expr"
 	"bosun.org/graphite"
 	"bosun.org/opentsdb"
@@ -48,7 +49,7 @@ type SystemConf struct {
 	GraphiteConf GraphiteConf
 	InfluxConf   InfluxConf
 	ElasticConf  map[string]ElasticConf
-
+	CloudWatchConf CloudWatchConf
 	AnnotateConf AnnotateConf
 
 	AuthConf *AuthConf
@@ -67,12 +68,13 @@ type SystemConf struct {
 // and the parse errors can be thrown for query functions that are used when the backend
 // is not enabled
 type EnabledBackends struct {
-	OpenTSDB bool
-	Graphite bool
-	Influx   bool
-	Elastic  bool
-	Logstash bool
-	Annotate bool
+	OpenTSDB   bool
+	Graphite   bool
+	Influx     bool
+	Elastic    bool
+	Logstash   bool
+	Annotate   bool
+	CloudWatch bool
 }
 
 // EnabledBackends returns and EnabledBackends struct which contains fields
@@ -84,6 +86,7 @@ func (sc *SystemConf) EnabledBackends() EnabledBackends {
 	b.Influx = sc.InfluxConf.URL != ""
 	b.Elastic = len(sc.ElasticConf["default"].Hosts) != 0
 	b.Annotate = len(sc.AnnotateConf.Hosts) != 0
+	b.CloudWatch = true
 	return b
 }
 
@@ -205,6 +208,10 @@ type LDAPGroup struct {
 	Path string
 	// Access to grant members of group Ex: "Admin"
 	Role string
+}
+
+type CloudWatchConf struct {
+	Region string
 }
 
 // GetSystemConfProvider returns the SystemConfProvider interface
@@ -532,6 +539,10 @@ func (sc *SystemConf) GetInfluxContext() client.HTTPConfig {
 		c.InsecureSkipVerify = sc.InfluxConf.UnsafeSSL
 	}
 	return c
+}
+
+func (sc *SystemConf) GetCloudWatchContext() cloudwatch.Context {
+	return cloudwatch.Config{}
 }
 
 // GetElasticContext returns an Elastic context which contains all the information

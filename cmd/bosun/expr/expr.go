@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"bosun.org/annotate/backend"
+	"bosun.org/cloudwatch"
 	"bosun.org/cmd/bosun/cache"
 	"bosun.org/cmd/bosun/expr/parse"
 	"bosun.org/cmd/bosun/search"
@@ -42,14 +43,18 @@ type State struct {
 
 	// OpenTSDB
 	tsdbQueries []opentsdb.Request
+
+	// CloudWatch
+	cloudwatchQueries []cloudwatch.Request
 }
 
 type Backends struct {
-	TSDBContext     opentsdb.Context
-	GraphiteContext graphite.Context
-	ElasticHosts    ElasticHosts
-	InfluxConfig    client.HTTPConfig
-	ElasticConfig   ElasticConfig
+	TSDBContext       opentsdb.Context
+	GraphiteContext   graphite.Context
+	ElasticHosts      ElasticHosts
+	InfluxConfig      client.HTTPConfig
+	ElasticConfig     ElasticConfig
+	CloudWatchContext cloudwatch.Context
 }
 
 type BosunProviders struct {
