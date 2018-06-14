@@ -86,7 +86,7 @@ func (sc *SystemConf) EnabledBackends() EnabledBackends {
 	b.Influx = sc.InfluxConf.URL != ""
 	b.Elastic = len(sc.ElasticConf["default"].Hosts) != 0
 	b.Annotate = len(sc.AnnotateConf.Hosts) != 0
-	b.CloudWatch = true
+	b.CloudWatch = sc.CloudWatchConf.Enabled
 	return b
 }
 
@@ -211,7 +211,7 @@ type LDAPGroup struct {
 }
 
 type CloudWatchConf struct {
-	Region string
+	Enabled bool
 }
 
 // GetSystemConfProvider returns the SystemConfProvider interface
