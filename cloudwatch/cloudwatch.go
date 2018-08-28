@@ -125,9 +125,11 @@ func (c Config) Query(r *Request) (Response, error) {
 	} else {
 		profile = "user-" + r.Profile
 	}
-	// if the session hasn't already been initalised for this profile create a new one
+	// if the session hasn't already been initialised for this profile create a new one
 	if c.Profiles[profile] == nil {
-		conf.Credentials = credentials.NewSharedCredentials("", r.Profile)
+		if profile != "bosun-default" {
+			conf.Credentials = credentials.NewSharedCredentials("", r.Profile)
+		}
 		conf.Region = aws.String(r.Region)
 		c.Profiles[profile] = cw.New(session.New(&conf))
 	}
