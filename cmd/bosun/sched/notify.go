@@ -143,7 +143,12 @@ func (s *Schedule) sendNotifications(silenced SilenceTester) {
 				continue
 			}
 			silenced := silenced(ak) != nil
-			if st.CurrentStatus == models.StUnknown {
+			
+			// VICTOROPS INTEGRATION
+			// Run the unknown template when alert state is unknown and when resolving from unknown,
+			// otherwise we'll resolve unknown alerts with a different template from the one that raised it.
+			// if st.CurrentStatus == models.StUnknown {
+			if st.CurrentStatus == models.StUnknown || (st.CurrentStatus == models.StNormal && st.LastAbnormalStatus == models.StUnknown) {
 				if silenced {
 					slog.Infoln("silencing unknown", ak)
 					continue
