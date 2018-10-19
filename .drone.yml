@@ -48,7 +48,7 @@ pipeline:
       branch:
         exclude: master
       event:
-        exclude: pull_request
+        exclude: [pull_request, tag]
 
 
   prod_bosun:
@@ -65,7 +65,6 @@ pipeline:
     target: /artifacts/bosun/${DRONE_TAG}/bosun
     strip_prefix: /drone/src/bosun.org/cmd/bosun/bosun
     when:
-      branch: master
       event: tag
 
 
@@ -86,7 +85,7 @@ pipeline:
       branch:
         exclude: master
       event:
-        exclude: pull_request
+        exclude: [pull_request, tag]
 
 
   sandbox_scollector:
@@ -103,7 +102,6 @@ pipeline:
     target: /artifacts/scollector/${DRONE_TAG}/scollector
     strip_prefix: /drone/src/bosun.org/cmd/scollector/scollector
     when:
-      branch: master
       event: tag
 
   prod_scollector:
@@ -120,7 +118,6 @@ pipeline:
     target: /artifacts/scollector/${DRONE_TAG}/scollector
     strip_prefix: /drone/src/bosun.org/cmd/scollector/scollector
     when:
-      branch: master
       event: tag
 
   increment_version:
