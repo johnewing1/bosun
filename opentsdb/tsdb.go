@@ -1115,7 +1115,7 @@ func CreateForwardHeader(r *http.Request) http.Header {
 			slog.Warning("unsupported format for remoteAddr: "+ r.RemoteAddr)
 		} else {
 			if header.Get("X-Forwarded-For") != "" {
-				header.Set("X-Forwarded-For", header.Get("X-Forwarded-For")+", "+remoteAddr)
+				header.Add("X-Forwarded-For", remoteAddr)
 			} else {
 				header.Set("X-Forwarded-For", remoteAddr)
 			}
