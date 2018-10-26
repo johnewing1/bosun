@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"math"
 	"math/big"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -1103,6 +1104,23 @@ func CreateForwardHeader(r *http.Request) http.Header {
 	header.Set("X-Origin", r.Header.Get("Origin"))
 	header.Set("X-Host", r.Header.Get("Host"))
 	header.Set("X-Cookie", r.Header.Get("Cookie"))
+
+	if r.Header.Get("X-Forwarded-For") != "" {
+		header.Set("X-Forwarded-For", r.Header.Get("X-Forwarded-For"))
+	}
+
+	if r.RemoteAddr != "" {
+		remoteAddr, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			slog.Warning("unsupported format for remoteAddr: "+ r.RemoteAddr)
+		} else {
+			if header.Get("X-Forwarded-For") != "" {
+				header.Set("X-Forwarded-For", header.Get("X-Forwarded-For")+", "+remoteAddr)
+			} else {
+				header.Set("X-Forwarded-For", remoteAddr)
+			}
+		}
+	}
 
 	return header
 }
