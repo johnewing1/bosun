@@ -1,6 +1,8 @@
 package opentsdb
 
 import (
+	"net/http"
+	"reflect"
 	"testing"
 )
 
@@ -374,6 +376,57 @@ func TestReplace(t *testing.T) {
 		}
 		if out != test.out {
 			t.Errorf("Test %d: %s != %s", i, out, test.out)
+		}
+	}
+}
+
+func TestCreateXForwardedForHeader(t *testing.T) {
+	tests := []struct {
+		in  *http.Request;
+		out []string
+	}{
+		{&http.Request{RemoteAddr: "1.1.1.1:2343", Header: map[string][]string{"X-Forwarded-For": {"123.0.0.1"}}}, []string{"123.0.0.1", "1.1.1.1"}},
+		{&http.Request{RemoteAddr: "1.1.1.1:2343"}, []string{"1.1.1.1"}},
+	}
+	for i, test := range tests {
+		out := CreateForwardHeader(test.in)
+		if !reflect.DeepEqual(test.out, out["X-Forwarded-For"]) {
+			t.Errorf("Test %d: %s != %s", i, out["X-Forwarded-For"], test.out)
+		}
+	}
+}
+
+func TestForwardHeaders(t *testing.T) {
+	tests := []struct {
+		in         *http.Request;
+		refererOut string;
+		originOut  string;
+		hostOut    string;
+		cookieOut  string
+	}{
+		{&http.Request{Header: map[string][]string{"Referer": {"https://mail.com"}}}, "https://mail.com", "", "", ""},
+
+		{&http.Request{Header: map[string][]string{"Origin": {"server.com"}, "Host": {"www.service0.com"}, "Cookie": {"sessionId=1234567"}}},
+			"", "server.com", "www.service0.com", "sessionId=1234567"},
+
+		{&http.Request{Header: map[string][]string{"Referer": {"https://mail.com"}, "Origin": {"server.com"}, "Host": {"www.service0.com"}, "Cookie": {"sessionId=1234567"}}},
+			"https://mail.com", "server.com", "www.service0.com", "sessionId=1234567"},
+
+		{&http.Request{}, "", "", "", ""},
+	}
+	for i, test := range tests {
+		out := CreateForwardHeader(test.in)
+		if test.refererOut != out.Get("X-Referer") {
+			t.Errorf("Test %d: %s != %s", i, out.Get("X-Referer"), test.refererOut)
+		}
+		if test.originOut != out.Get("X-Origin") {
+			t.Errorf("Test %d: %s != %s", i, out.Get("X-Origin"), test.originOut)
+		}
+		if test.hostOut != out.Get("X-Host") {
+			t.Errorf("Test %d: %s != %s", i, out.Get("X-Host"), test.hostOut)
+		}
+		if test.cookieOut != out.Get("X-Cookie") {
+			t.Errorf("Test %d: %s != %s", i, out.Get("X-Cookie"), test.cookieOut)
 		}
 	}
 }
