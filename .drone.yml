@@ -1,11 +1,11 @@
+workspace:
+  base: /go
+  path: src/bosun.org/
+
 clone:
   clone:
     image: 325714046698.dkr.ecr.eu-west-1.amazonaws.com/dmx/drone-git:next
     pull: true
-
-matrix:
-  GOPATH:
-    - /drone
 
 pipeline:
   test:
@@ -13,22 +13,24 @@ pipeline:
     environment:
       - AWS_ACCESS_KEY_ID=$$CLOUDWATCH_ACCESSKEY
       - AWS_SECRET_ACCESS_KEY=$$CLOUDWATCH_SECRET_ACCESSKEY
+      - GOPATH=/go
     commands:
-      - cp -r . ${GOPATH}/src/bosun.org
-      - cd ${GOPATH}/src/bosun.org/cmd/bosun
       - go test -v bosun.org/...
 
   build_bosun:
     image: golang:1.10.3-alpine
+    environment:
+      - GOPATH=/go
     commands:
-      - cp -r . ${GOPATH}/src/bosun.org
-      - cd ${GOPATH}/src/bosun.org/cmd/bosun
+      - cd cmd/bosun
       - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bosun -tags esv5
 
   build_scollector:
     image: golang:1.10.3-alpine
+    environment:
+      - GOPATH=/go
     commands:
-      - cd ${GOPATH}/src/bosun.org/cmd/scollector
+      - cd cmd/scollector
       - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o scollector -tags esv5
 
   prod_bosun_snapshot:
@@ -41,15 +43,14 @@ pipeline:
         target: aws_access_key_id
       - source: prod_secretkey
         target: aws_secret_access_key
-    source: /drone/src/bosun.org/cmd/bosun/bosun
+    source: /go/src/bosun.org/cmd/bosun/bosun
     target: /artifacts/bosun/${DRONE_BRANCH}-0.6.0-1.0.${DRONE_BUILD_NUMBER}/bosun
-    strip_prefix: /drone/src/bosun.org/cmd/bosun/bosun
+    strip_prefix: /go/src/bosun.org/cmd/bosun/bosun
     when:
       branch:
         exclude: master
       event:
         exclude: [pull_request, tag]
-
 
   prod_bosun:
     image: plugins/s3
@@ -61,12 +62,11 @@ pipeline:
         target: aws_access_key_id
       - source: prod_secretkey
         target: aws_secret_access_key
-    source: /drone/src/bosun.org/cmd/bosun/bosun
+    source: /go/src/bosun.org/cmd/bosun/bosun
     target: /artifacts/bosun/${DRONE_TAG}/bosun
-    strip_prefix: /drone/src/bosun.org/cmd/bosun/bosun
+    strip_prefix: /go/src/bosun.org/cmd/bosun/bosun
     when:
       event: tag
-
 
   sandbox_scollector_snapshot:
     image: plugins/s3
@@ -78,15 +78,14 @@ pipeline:
         target: aws_access_key_id
       - source: sandbox_secretkey
         target: aws_secret_access_key
-    source: /drone/src/bosun.org/cmd/scollector/scollector
+    source: /go/src/bosun.org/cmd/scollector/scollector
     target: /artifacts/scollector/${DRONE_BRANCH}-0.6.0-1.0.${DRONE_BUILD_NUMBER}/scollector
-    strip_prefix: /drone/src/bosun.org/cmd/scollector/scollector
+    strip_prefix: /go/src/bosun.org/cmd/scollector/scollector
     when:
       branch:
         exclude: master
       event:
         exclude: [pull_request, tag]
-
 
   sandbox_scollector:
     image: plugins/s3
@@ -98,9 +97,9 @@ pipeline:
         target: aws_access_key_id
       - source: sandbox_secretkey
         target: aws_secret_access_key
-    source: /drone/src/bosun.org/cmd/scollector/scollector
+    source: /go/src/bosun.org/cmd/scollector/scollector
     target: /artifacts/scollector/${DRONE_TAG}/scollector
-    strip_prefix: /drone/src/bosun.org/cmd/scollector/scollector
+    strip_prefix: /go/src/bosun.org/cmd/scollector/scollector
     when:
       event: tag
 
@@ -114,9 +113,9 @@ pipeline:
         target: aws_access_key_id
       - source: prod_secretkey
         target: aws_secret_access_key
-    source: /drone/src/bosun.org/cmd/scollector/scollector
+    source: /go/src/bosun.org/cmd/scollector/scollector
     target: /artifacts/scollector/${DRONE_TAG}/scollector
-    strip_prefix: /drone/src/bosun.org/cmd/scollector/scollector
+    strip_prefix: /go/src/bosun.org/cmd/scollector/scollector
     when:
       event: tag
 
@@ -127,4 +126,3 @@ pipeline:
       branch: master
       event:
         exclude: pull_request
-
