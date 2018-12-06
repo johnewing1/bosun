@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -360,7 +361,10 @@ func Over(e *State, query, duration, period string, num float64) (r *Results, er
 	return OverQuery(e, query, duration, period, "", num)
 }
 
+var rePerc = regexp.MustCompile(`_pct_(?P<percentile>\d{1,3}(\.\d+)?)`)
+
 func Query(e *State, query, sduration, eduration string) (r *Results, err error) {
+
 	r = new(Results)
 	q, err := opentsdb.ParseQuery(query, e.TSDBContext.Version())
 	if q == nil && err != nil {
@@ -395,7 +399,14 @@ func Query(e *State, query, sduration, eduration string) (r *Results, err error)
 	if err != nil {
 		return
 	}
+
 	for _, res := range s {
+		// tsdb returns percentiles by modifying the metric name :-/
+		// parse out the percentiles into a tag
+		if e.TSDBContext.Version().Minor >= 4 && q.Percentiles != nil {
+			matches := rePerc.FindStringSubmatch(res.Metric)
+			res.Tags["percentile"] = matches[1]
+		}
 		if e.Squelched(res.Tags) {
 			continue
 		}

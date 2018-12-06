@@ -140,6 +140,34 @@ func TestParseRequestV2_2(t *testing.T) {
 		}
 	}
 }
+
+func TestParseRequestV2_4(t *testing.T) {
+	tests := []struct {
+		query string
+		error bool
+	}{
+		{"start=1&m=sum:c", false},
+		{"start=1&m=sum:c&end=2", false},
+		{"start=1&m=sum:10m-avg:rate:proc.stat.cpu{t=v,o=k}", false},
+		{"start=1&m=sum:10m-avg:rate:proc.stat.cpu{}{t=v,o=k}", false},
+		{"start=1&m=sum:10m-avg:rate:proc.stat.cpu{z=iwildcard(foo*)}{t=v,o=k}", false},
+		{"start=1&m=sum:10m-sum:percentiles[99.99,99.9,99,95,50]:request.latency{region=eu-west-1}", false},
+
+		{"start=&m=", true},
+		{"m=sum:c", true},
+		{"start=1", true},
+		{"start=1&m=sum:10m-sum:percentiles[]:request.latency{region=eu-west-1}", true},
+	}
+	for _, q := range tests {
+		_, err := ParseRequest(q.query, Version2_4)
+		if err != nil && !q.error {
+			t.Errorf("got error: %s: %s", q.query, err)
+		} else if err == nil && q.error {
+			t.Errorf("expected error: %s", q.query)
+		}
+	}
+}
+
 func TestTagGroupParsing(t *testing.T) {
 	tests := []struct {
 		query  string
@@ -311,6 +339,15 @@ func TestQueryString(t *testing.T) {
 				},
 			},
 			"avg:test.metric",
+		},
+		{
+			Query{
+				Aggregator:  "sum",
+				Metric:      "test.metric",
+				Rate:        false,
+				Percentiles: Percentiles{99.9, 99, 95},
+			},
+			"sum:percentiles[99.9,99,95]:test.metric",
 		},
 	}
 	for _, q := range tests {
