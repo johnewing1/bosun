@@ -88,7 +88,8 @@ func timeTSDBRequest(e *State, req *opentsdb.Request) (s opentsdb.ResponseSet, e
 		}
 	}
 	b, _ := json.MarshalIndent(req, "", "  ")
-	tries := 1
+	exponentialBackoff := &exponentialBackoff{
+		tsdbMaxTries, defaultBackoffFactor, defaultMaxDelayMillis, defaultAttemptNumber}
 	for {
 		e.Timer.StepCustomTiming("tsdb", "query", string(b), func() {
 			getFn := func() (interface{}, error) {
@@ -106,11 +107,15 @@ func timeTSDBRequest(e *State, req *opentsdb.Request) (s opentsdb.ResponseSet, e
 				}
 			}
 		})
-		if err == nil || tries == tsdbMaxTries {
+		if !shouldRetry(err) {
 			break
 		}
-		slog.Errorf("Error on tsdb query %d: %s", tries, err.Error())
-		tries++
+		t, err := exponentialBackoff.jitterBackoff()
+		if err != nil {
+			slog.Errorf("Error on tsdb query: %s", err.Error())
+			break
+		}
+		time.Sleep(t)
 	}
 	return
 }
