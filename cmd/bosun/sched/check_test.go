@@ -80,6 +80,8 @@ func TestCheckFlapping(t *testing.T) {
 		{models.StWarning, false},
 		{models.StCritical, false},
 		{models.StNormal, true},
+		{models.StUnknown, true},
+		{models.StNormal, true},
 	}
 
 	for i, trans := range transitions {

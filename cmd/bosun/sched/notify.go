@@ -143,7 +143,12 @@ func (s *Schedule) sendNotifications(silenced SilenceTester) {
 				continue
 			}
 			silenced := silenced(ak) != nil
-			if st.CurrentStatus == models.StUnknown {
+			
+			// VICTOROPS INTEGRATION
+			// Run the unknown template when alert state is unknown and when resolving from unknown,
+			// otherwise we'll resolve unknown alerts with a different template from the one that raised it.
+			// if st.CurrentStatus == models.StUnknown {
+			if st.CurrentStatus == models.StUnknown || (st.CurrentStatus == models.StNormal && st.LastAbnormalStatus == models.StUnknown) {
 				if silenced {
 					slog.Infoln("silencing unknown", ak)
 					continue
@@ -187,6 +192,8 @@ func (s *Schedule) sendUnknownNotifications() {
 			ustates[st.AlertKey] = st
 		}
 		var c int
+		var multiUstates []*models.IncidentState
+
 		hitThreshold := false
 		overThresholdSets := make(map[string]models.AlertKeys)
 		minGroupSize := s.SystemConf.GetMinGroupSize()
@@ -200,20 +207,23 @@ func (s *Schedule) sendUnknownNotifications() {
 		}
 		for name, group := range groupSets {
 			c++
-			if c >= threshold && threshold > 0 {
-				if !hitThreshold && len(groupSets) == c {
-					// If the threshold is hit but only 1 email remains, just send the normal unknown
-					n.NotifyUnknown(gk.template, s.SystemConf, name, group)
-					break
+			for _, ak := range group {
+				if c >= threshold && threshold > 0 {
+					if !hitThreshold && len(groupSets) == c {
+						// If the threshold is hit but only 1 email remains, just send the normal unknown
+						n.NotifyUnknown(gk.template, s.SystemConf, name, group, ustates[ak])
+						break
+					}
+					hitThreshold = true
+					overThresholdSets[name] = group
+					multiUstates = append(multiUstates, ustates[ak])
+				} else {
+					n.NotifyUnknown(gk.template, s.SystemConf, name, group, ustates[ak])
 				}
-				hitThreshold = true
-				overThresholdSets[name] = group
-			} else {
-				n.NotifyUnknown(gk.template, s.SystemConf, name, group)
 			}
 		}
 		if len(overThresholdSets) > 0 {
-			n.NotifyMultipleUnknowns(gk.template, s.SystemConf, overThresholdSets)
+			n.NotifyMultipleUnknowns(gk.template, s.SystemConf, overThresholdSets, multiUstates)
 		}
 	}
 	s.pendingUnknowns = make(map[notificationGroupKey][]*models.IncidentState)

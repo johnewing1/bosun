@@ -374,10 +374,19 @@ Generic query from endDuration to startDuration ago. If endDuration is the empty
 
 Band performs `num` queries of `duration` each, `period` apart and concatenates them together, starting `period` ago. So `band("avg:os.cpu", "1h", "1d", 7)` will return a series comprising of the given metric from 1d to 1d-1h-ago, 2d to 2d-1h-ago, etc, until 8d. This is a good way to get a time block from a certain hour of a day or certain day of a week over a long time period.
 
+Note: this function wraps a more general version `bandQuery(query string, duration string, period string, eduration string, num scalar) seriesSet`, where `eduration` specifies the end duration for the query to stop at, as with `q()`.
+
 ### over(query string, duration string, period string, num scalar) seriesSet
 {: .exprFunc}
 
-Over's arguments behave the same way as band. However over shifts the time of previous periods to be now, tags them with duration that each period was shifted, and merges those shifted periods into a single seriesSet. This is useful for displaying time over time graphs. For example, the same day week over week would be `over("avg:1h-avg:rate:os.cpu{host=ny-bosun01}", "1d", "1w", 4)`.
+Over's arguments behave the same way as band. However over shifts the time of previous periods to be now, tags them with duration that each period was shifted, and merges those shifted periods into a single seriesSet, which includes the most recent period. This is useful for displaying time over time graphs. For example, the same day week over week would be `over("avg:1h-avg:rate:os.cpu{host=ny-bosun01}", "1d", "1w", 4)`.
+
+Note: this function wraps a more general version `overQuery(query string, duration string, period string, eduration string, num scalar) seriesSet`, where `eduration` specifies the end duration for the query to stop at, as with `q`. Results are still shifted to end at current time.
+
+### shiftBand(query string, duration string, period string, num scalar) seriesSet
+{: .exprFunc}
+
+shiftBand's behaviour is very similar to `over`, however the most recent period is not included in the seriesSet. This function could be useful for anomaly detection when used with `aggr`, to calculate historical distributions to compare against.
 
 ### change(query string, startDuration string, endDuration string) numberSet
 {: .exprFunc}
@@ -670,6 +679,30 @@ $agg = aggr($weeks, "region,color", "p.50")
 
 The above example uses `over` to load a 24 hour period over the past 3 weeks. We then use the aggr function to combine the three weeks into one, selecting the median (`p.50`) value of the 3 weeks at each timestamp. This results in a new seriesSet, grouped by region and color, that represents a "normal" 24 hour period with anomalies removed.
 
+An error will be returned if a group is specified to aggregate on that does not exist in the original seriesSet.
+
+The aggr function expects points in the original series to be aligned by timestamp. If points are not aligned, they are aggregated separately. For example, if we had a seriesSet,
+
+Group       | Timestamp | Value |
+----------- | --------- | ----- |
+{host=web01} | 1 | 1 |
+{host=web01} | 2 | 7 |
+{host=web01} | 1 | 4 |
+
+and applied the following aggregation:
+
+```
+aggr($series, "host", "max")
+```
+
+we would receive the following aggregated result:
+
+Group       | Timestamp | Value | Timestamp | Value |
+----------- | --------- | ----- | --------- | ----- |
+{host=web01} | 1 | 4 | 2 | 7 |
+
+aggr also does not attempt to deal with NaN values in a consistent manner. If all values for a specific timestamp are NaN, the result for that timestamp will be NaN. If a particular timestamp has a mix of NaN and non-NaN values, the result may or may not be NaN, depending on the aggregation function specified.
+
 # Group Functions
 
 Group functions modify the OpenTSDB groups.
@@ -692,7 +725,7 @@ Accepts a tag key to remove from the set. The function will error if removing th
 ## t(numberSet, group string) seriesSet
 {: .exprFunc}
 
-Transposes N series of length 1 to 1 series of length N. If the group parameter is not the empty string, the number of series returned is equal to the number of tagks passed. This is useful for performing scalar aggregation across multiple results from a query. For example, to get the total memory used on the web tier: `sum(t(avg(q("avg:os.mem.used{host=*-web*}", "5m", "")), ""))`.
+Transposes N series of length 1 to 1 series of length N. If the group parameter is not the empty string, the number of series returned is equal to the number of tagks passed. This is useful for performing scalar aggregation across multiple results from a query. For example, to get the total memory used on the web tier: `sum(t(avg(q("avg:os.mem.used{host=*-web*}", "5m", "")), ""))`. See [Understanding the Transpose Function](/t) for more explanation.
 
 How transpose works conceptually
 

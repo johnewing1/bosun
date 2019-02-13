@@ -222,7 +222,7 @@ func (s *Schedule) runHistory(r *RunHistory, ak models.AlertKey, event *models.E
 	}
 
 	// VICTOROPS INTEGRATION: Enables notification of incidents which have returned to normal (Sends normNotification defined in config)
-	if event.Status <= models.StNormal && (incident.CurrentStatus == models.StWarning || incident.CurrentStatus == models.StCritical) {
+	if event.Status <= models.StNormal && (incident.CurrentStatus == models.StWarning || incident.CurrentStatus == models.StCritical || incident.CurrentStatus == models.StUnknown) {
 		slog.Infof("TRIGGER_RESOLVED: from %s to %s", incident.CurrentStatus, event.Status)
 		shouldNotify = true
 	}

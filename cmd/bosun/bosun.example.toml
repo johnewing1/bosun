@@ -53,7 +53,7 @@ ExampleExpression = 'avg(q("avg:rate:os.cpu{host=*bosun*}", "5m", "")) > 80'
 [OpenTSDBConf]
 	Host = "ny-tsdb01:4242"
 	# Default is 2.1, certain features like filters are enabled when the version is set to 2.2
-	Version = 2.2
+	Version = "2.2"
 	# ResponseLimit will make requests error if the response from opentsdb is larger than this setting in bytes. Default of 1MB
 	ResponseLimit = 25000000
 

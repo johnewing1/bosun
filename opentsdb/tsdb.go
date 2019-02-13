@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"math"
 	"math/big"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -390,6 +391,8 @@ func RequestFromJSON(b []byte) (*Request, error) {
 	return &r, nil
 }
 
+type Percentiles []float64
+
 // Query is a query for a request:
 // http://opentsdb.net/docs/build/html/api_http/query/index.html#sub-queries.
 type Query struct {
@@ -401,6 +404,7 @@ type Query struct {
 	Tags        TagSet      `json:"tags,omitempty"`
 	Filters     Filters     `json:"filters,omitempty"`
 	GroupByTags TagSet      `json:"-"`
+	Percentiles Percentiles `json:"percentiles,omitempty"`
 }
 
 type Filter struct {
@@ -481,8 +485,9 @@ func ParseRequest(req string, version Version) (*Request, error) {
 	return &r, nil
 }
 
-var qRE2_1 = regexp.MustCompile(`^(?P<aggregator>\w+):(?:(?P<downsample>\w+-\w+):)?(?:(?P<rate>rate.*):)?(?P<metric>[\w./-]+)(?:\{([\w./,=*-|]+)\})?$`)
-var qRE2_2 = regexp.MustCompile(`^(?P<aggregator>\w+):(?:(?P<downsample>\w+-\w+(?:-(?:\w+))?):)?(?:(?P<rate>rate.*):)?(?P<metric>[\w./-]+)(?:\{([^}]+)?\})?(?:\{([^}]+)?\})?$`)
+var qRE2_1 = regexp.MustCompile(`^(?P<aggregator>\w+):(?:(?P<downsample>\w+-\w+):)?(?:(?P<rate>rate.*):)?(?P<metric>[\w./-]+)(?:\{(?P<group>[\w./,=*-|]+)\})?$`)
+var qRE2_2 = regexp.MustCompile(`^(?P<aggregator>\w+):(?:(?P<downsample>\w+-\w+(?:-(?:\w+))?):)?(?:(?P<rate>rate.*):)?(?P<metric>[\w./-]+)(?:\{(?P<group>[^}]+)?\})?(?:\{(?P<filter>[^}]+)?\})?$`)
+var qRE2_4 = regexp.MustCompile(`^(?P<aggregator>\w+):(?:(?P<downsample>\w+-\w+(?:-(?:\w+))?):)?(?:(?P<rate>rate.*):)?(?:percentiles\[(?P<percentiles>([0-9\.])+(,[0-9\.]+)*)\]:)?(?P<metric>[\w./-]+)(?:\{(?P<group>[^}]+)?\})?(?:\{(?P<filter>[^}]+)?\})?$`)
 
 // ParseQuery parses OpenTSDB queries of the form: avg:rate:cpu{k=v}. Validation
 // errors will be returned along with a valid Query.
@@ -491,6 +496,9 @@ func ParseQuery(query string, version Version) (q *Query, err error) {
 	q = new(Query)
 	if version.FilterSupport() {
 		regExp = qRE2_2
+	}
+	if version.PercentileSupport() {
+		regExp = qRE2_4
 	}
 
 	m := regExp.FindStringSubmatch(query)
@@ -532,8 +540,20 @@ func ParseQuery(query string, version Version) (q *Query, err error) {
 	}
 	q.Metric = result["metric"]
 
-	if !version.FilterSupport() && len(m) > 5 && m[5] != "" {
-		tags, e := ParseTags(m[5])
+	if version.PercentileSupport() {
+
+		p, e := ParsePercentiles(result["percentiles"])
+		if e != nil {
+			err = e
+			if p == nil {
+				return
+			}
+		}
+		q.Percentiles = p
+	}
+
+	if !version.FilterSupport() && result["group"] != "" {
+		tags, e := ParseTags(result["group"])
 		if e != nil {
 			err = e
 			if tags == nil {
@@ -550,17 +570,17 @@ func ParseQuery(query string, version Version) (q *Query, err error) {
 	// OpenTSDB Greater than 2.2, treating as filters
 	q.GroupByTags = make(TagSet)
 	q.Filters = make([]Filter, 0)
-	if m[5] != "" {
-		f, err := ParseFilters(m[5], true, q)
+	if result["group"] != "" {
+		f, err := ParseFilters(result["group"], true, q)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to parse filter(s): %s", m[5])
+			return nil, fmt.Errorf("Failed to parse filter(s): %s", result["group"])
 		}
 		q.Filters = append(q.Filters, f...)
 	}
-	if m[6] != "" {
-		f, err := ParseFilters(m[6], false, q)
+	if result["filter"] != "" {
+		f, err := ParseFilters(result["filter"], false, q)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to parse filter(s): %s", m[6])
+			return nil, fmt.Errorf("Failed to parse filter(s): %s", result["filter"])
 		}
 		q.Filters = append(q.Filters, f...)
 	}
@@ -643,6 +663,21 @@ func ParseTags(t string) (TagSet, error) {
 	return ts, err
 }
 
+func ParsePercentiles(s string) (Percentiles, error) {
+
+	if s == "" {
+		return nil, nil
+	}
+	l := strings.Split(s, ",")
+	var percentiles []float64
+	for _, p := range l {
+		f, _ := strconv.ParseFloat(p, 64)
+		percentiles = append(percentiles, f)
+	}
+
+	return percentiles, nil
+}
+
 // ValidTSDBString returns true if s is a valid metric or tag.
 func ValidTSDBString(s string) bool {
 	if s == "" {
@@ -680,6 +715,16 @@ func (q Query) String() string {
 	s := q.Aggregator + ":"
 	if q.Downsample != "" {
 		s += q.Downsample + ":"
+	}
+	if q.Percentiles != nil {
+		s += "percentiles["
+		for i, p := range q.Percentiles {
+			s += strconv.FormatFloat(p, 'f', -1, 64)
+			if i < len(q.Percentiles)-1 {
+				s += ","
+			}
+		}
+		s += "]:"
 	}
 	if q.Rate {
 		s += "rate"
@@ -995,6 +1040,9 @@ var Version2_1 = Version{2, 1}
 // OpenTSDB 2.2 version struct
 var Version2_2 = Version{2, 2}
 
+// OpenTSDB 2.4 version struct
+var Version2_4 = Version{2, 4}
+
 type Version struct {
 	Major int64
 	Minor int64
@@ -1010,7 +1058,7 @@ func (v *Version) UnmarshalText(text []byte) error {
 	if err != nil {
 		return fmt.Errorf("could not parse major version number for opentsdb version: %v", split[0])
 	}
-	v.Minor, err = strconv.ParseInt(split[0], 10, 64)
+	v.Minor, err = strconv.ParseInt(split[1], 10, 64)
 	if err != nil {
 		return fmt.Errorf("could not parse minor version number for opentsdb version: %v", split[1])
 	}
@@ -1019,6 +1067,10 @@ func (v *Version) UnmarshalText(text []byte) error {
 
 func (v Version) FilterSupport() bool {
 	return v.Major >= 2 && v.Minor >= 2
+}
+
+func (v Version) PercentileSupport() bool {
+	return v.Major >= 2 && v.Minor >= 4
 }
 
 // LimitContext is a context that enables limiting response size and filtering tags
@@ -1103,6 +1155,23 @@ func CreateForwardHeader(r *http.Request) http.Header {
 	header.Set("X-Origin", r.Header.Get("Origin"))
 	header.Set("X-Host", r.Header.Get("Host"))
 	header.Set("X-Cookie", r.Header.Get("Cookie"))
+
+	if r.Header.Get("X-Forwarded-For") != "" {
+		header.Set("X-Forwarded-For", r.Header.Get("X-Forwarded-For"))
+	}
+
+	if r.RemoteAddr != "" {
+		remoteAddr, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			slog.Warning("unsupported format for remoteAddr: "+ r.RemoteAddr)
+		} else {
+			if header.Get("X-Forwarded-For") != "" {
+				header.Add("X-Forwarded-For", remoteAddr)
+			} else {
+				header.Set("X-Forwarded-For", remoteAddr)
+			}
+		}
+	}
 
 	return header
 }
