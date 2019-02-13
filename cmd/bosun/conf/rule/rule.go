@@ -126,20 +126,8 @@ func ParseFile(fname string, backends conf.EnabledBackends, sysVars map[string]s
 	if err != nil {
 		return nil, err
 	}
-	f2, err := ioutil.ReadFile("bosun2.conf")
-	if err != nil {
-		return nil, err
-	}
 
-	fmt.Printf("%s\n", fname)
-
-	c,err := NewConf(fname, backends, sysVars, string(f))
-	c2,err := NewConf("bosun2.conf", backends, sysVars, string(f2))
-	cc,err := CombineConf(c, c2)
-
-	//fmt.Println("COMBINE CONFIG: ", cc)
-
-	return cc,err
+	return NewConf(fname, backends, sysVars, string(f))
 }
 
 func ParseDirectory(dirname string, backends conf.EnabledBackends, sysVars map[string]string) (*Conf, error) {
