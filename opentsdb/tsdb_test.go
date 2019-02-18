@@ -1,6 +1,7 @@
 package opentsdb
 
 import (
+	"encoding/json"
 	"net/http"
 	"reflect"
 	"testing"
@@ -429,6 +430,49 @@ func TestCreateXForwardedForHeader(t *testing.T) {
 		out := CreateForwardHeader(test.in)
 		if !reflect.DeepEqual(test.out, out["X-Forwarded-For"]) {
 			t.Errorf("Test %d: %s != %s", i, out["X-Forwarded-For"], test.out)
+		}
+	}
+}
+
+func TestDPSMap_UnmarshalJSON_dropsNonNumbers(t *testing.T) {
+	testCases := []struct{
+		jsonInput	[]byte
+		expected	DPSMap	`json:"dps"`
+
+	}{
+		{
+			[]byte(`{"dps": {"123": "NaN", "234": 42, "987": null, "42": 123.456, "some": "other string"}}`),
+			DPSMap{"234": 42, "42": 123.456},
+		},
+	}
+
+	type testModelWithDPSMap struct {
+		DPS DPSMap `json:"dps"`
+	}
+
+	for _, testCase := range testCases {
+
+		underTest := testModelWithDPSMap{}
+
+		err := json.Unmarshal(testCase.jsonInput, &underTest)
+
+		if err != nil {
+			t.Errorf("Expected unmarshalling error to be nil, got %v", err)
+		}
+
+		if len(underTest.DPS) != len(testCase.expected) {
+			t.Errorf("Expected the map to have length %d, got %d", len(testCase.expected), len(underTest.DPS))
+		}
+
+		for ts, expectedValue := range testCase.expected {
+			actualValue, ok := underTest.DPS[ts]
+			if !ok {
+				t.Errorf("Expected to find %s", ts)
+			}
+
+			if actualValue != expectedValue {
+				t.Errorf("Expected %s to be %f, got %f", ts, expectedValue, actualValue)
+			}
 		}
 	}
 }
