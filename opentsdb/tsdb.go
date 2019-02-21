@@ -39,16 +39,36 @@ func (r ResponseSet) Copy() ResponseSet {
 // Point is the Response data point type.
 type Point float64
 
+type DPSMap map[string]Point
+
 // Response is a query response:
 // http://opentsdb.net/docs/build/html/api_http/query/index.html#response.
 type Response struct {
 	Metric        string           `json:"metric"`
 	Tags          TagSet           `json:"tags"`
 	AggregateTags []string         `json:"aggregateTags"`
-	DPS           map[string]Point `json:"dps"`
+	DPS           DPSMap           `json:"dps"`
 
 	// fields added by translating proxy
 	SQL string `json:"sql,omitempty"`
+}
+
+func (m *DPSMap) UnmarshalJSON(b []byte) error {
+	// OpenTSDB returns NaNs for empty histograms. We need to filter these data points out (see DATA-7491)
+	var interfaceMap map[string]interface{}
+	*m = make(DPSMap)
+
+	if err := json.Unmarshal(b, &interfaceMap); err != nil {
+		return err
+	}
+
+	for timestamp, v := range interfaceMap {
+		if point, ok := v.(float64); ok {
+			(*m)[timestamp] = Point(point)
+		}
+	}
+
+	return nil
 }
 
 func (r *Response) Copy() *Response {
