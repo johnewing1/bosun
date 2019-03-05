@@ -18,9 +18,9 @@ import (
 
 func tagQuery(args []parse.Node) (parse.Tags, error) {
 	n := args[0].(*parse.StringNode)
-	// Since all 2.1 queries are valid 2.2 queries, at this time
-	// we can just use 2.2 to parse to identify group by tags
-	q, err := opentsdb.ParseQuery(n.Text, opentsdb.Version2_2)
+	// Since all 2.1 & 2.2 queries are valid 2.4 queries, at this time
+	// we can just use 2.4 to parse to identify group by tags
+	q, err := opentsdb.ParseQuery(n.Text, opentsdb.Version2_4)
 	if q == nil && err != nil {
 		return nil, err
 	}

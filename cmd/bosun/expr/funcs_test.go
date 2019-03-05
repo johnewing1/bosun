@@ -1,6 +1,7 @@
 package expr
 
 import (
+	"bosun.org/cmd/bosun/expr/parse"
 	"fmt"
 	"math"
 	"testing"
@@ -271,7 +272,7 @@ func TestAggr(t *testing.T) {
 	seriesMathB := `series("color=blue,type=apple", 1, 3)`
 	seriesMathC := `series("color=green,type=apple", 0, 5)`
 
-	aggrTestCases := []struct{
+	aggrTestCases := []struct {
 		name      string
 		expr      string
 		want      Results
@@ -374,9 +375,9 @@ func TestAggr(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "check that unknown aggregator errors out",
-			expr: fmt.Sprintf("aggr(merge(%v, %v, %v), \"\", \"unknown\")", seriesA, seriesB, seriesC),
-			want: Results{},
+			name:      "check that unknown aggregator errors out",
+			expr:      fmt.Sprintf("aggr(merge(%v, %v, %v), \"\", \"unknown\")", seriesA, seriesB, seriesC),
+			want:      Results{},
 			shouldErr: true,
 		},
 		{
@@ -487,8 +488,8 @@ func TestAggr(t *testing.T) {
 
 	for _, tc := range aggrTestCases {
 		err := testExpression(exprInOut{
-			expr: tc.expr,
-			out: tc.want,
+			expr:           tc.expr,
+			out:            tc.want,
 			shouldParseErr: false,
 		})
 		if !tc.shouldErr && err != nil {
@@ -544,5 +545,31 @@ func TestAggrNaNHandling(t *testing.T) {
 	val1 := results[0].Value.(Series)[time.Unix(100, 0)]
 	if val1 != 2.0 {
 		t.Errorf("got second point = %f, want %f", val1, 2.0)
+	}
+}
+
+func TestTagQuery(t *testing.T) {
+
+	var tests = []struct {
+		query string
+		tags  parse.Tags
+	}{
+		{"sum:sys.cpu{dc=*}", parse.Tags{"dc": {}}},
+		{"sum:15m-sum:percentiles[99.9]:web.request.latency{dc=*,service=frontend}", parse.Tags{"dc": {}, "service": {}}},
+	}
+
+	args := make([]parse.Node, 3)
+
+	for _, u := range tests {
+		n := new(parse.StringNode)
+		n.Text = u.query
+		args[0] = n
+		tags, err := tagQuery(args)
+		if err != nil {
+			t.Errorf("Error parsing tags %s", err)
+		}
+		if !tags.Equal(u.tags) {
+			t.Errorf("Missmatching tags, expected '%s' , got '%s' ", u.tags, tags)
+		}
 	}
 }
