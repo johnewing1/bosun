@@ -6,6 +6,7 @@ import (
 	htemplate "html/template"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -131,23 +132,34 @@ func ParseFile(fname string, backends conf.EnabledBackends, sysVars map[string]s
 }
 
 func ParseDirectory(dirname string, backends conf.EnabledBackends, sysVars map[string]string) (*Conf, error) {
-	confs, err := ioutil.ReadDir(dirname)
+	var files []string
+	err := filepath.Walk(dirname,
+		func(path string, info os.FileInfo, err error) error {
+			files = append(files, path)
+			return nil
+		})
 	if err != nil {
 		return nil, err
 	}
 
 	configText := ""
-
-	for _, f := range confs {
-		fc, err := ioutil.ReadFile(dirname + "/" + f.Name())
+	for _, fpath := range files {
+		fmt.Println(fpath)
+		matchConf, err := filepath.Match("*.conf", filepath.Base(fpath))
 		if err != nil {
 			return nil, err
 		}
-		configText += string(fc)
+		fmt.Println(matchConf)
+		if matchConf {
+			fc, err := ioutil.ReadFile(fpath)
+			if err != nil {
+				return nil, err
+			}
+			configText += "\n### FROM " + fpath + "\n" + string(fc) + "\n### END " + fpath + "\n"
+		}
 	}
-
 	c, err := NewConf("bosun.conf", backends, sysVars, configText)
-	fmt.Println("COMBINE CONFIG: ", c)
+
 	return c, err
 }
 
