@@ -1,5 +1,6 @@
 package rule
 
+
 import (
 	"encoding/json"
 	"fmt"
@@ -159,6 +160,7 @@ func ParseDirectory(dirname string, backends conf.EnabledBackends, sysVars map[s
 		}
 	}
 	c, err := NewConf("bosun.conf", backends, sysVars, configText)
+	fmt.Println(c)
 
 	return c, err
 }
@@ -166,29 +168,6 @@ func ParseDirectory(dirname string, backends conf.EnabledBackends, sysVars map[s
 func (c *Conf) SaveConf(newConf *Conf) error {
 	return ioutil.WriteFile(c.Name, []byte(newConf.RawText), os.FileMode(int(0640)))
 }
-
-func CombineConf(conf1 *Conf, conf2 *Conf) (c *Conf, err error) {
-	c = &Conf{
-		Name:             conf1.Name + conf2.Name,
-		Vars:             conf.CombineVars(conf1.Vars, conf2.Vars),
-		Templates:        conf.CombineTemplates(conf1.Templates, conf2.Templates),
-		Alerts:           conf.CombineAlerts(conf1.Alerts, conf2.Alerts),
-		Notifications:    conf.CombineNotifs(conf1.Notifications, conf2.Notifications),
-		//Raw text conversion shouldn't be just concat
-		RawText:          conf1.RawText + conf2.RawText,
-		bodies:           template.New("body").Funcs(defaultFuncs),
-		subjects:         template.New("subject").Funcs(defaultFuncs),
-		customTemplates:  map[string]*template.Template{},
-		Lookups:          conf.CombineLookups(conf1.Lookups, conf2.Lookups),
-		Macros:           conf.CombineMacros(conf1.Macros, conf2.Macros),
-		writeLock:        make(chan bool, 1),
-		deferredSections: make(map[string][]deferredSection),
-		backends:         conf.CombineBackends(conf1.backends, conf2.backends),
-		sysVars:          conf.CombineSysVars(conf1.sysVars, conf2.sysVars),
-	}
-	return
-}
-
 
 
 
