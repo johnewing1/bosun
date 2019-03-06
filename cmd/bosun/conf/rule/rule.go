@@ -123,6 +123,18 @@ func (c *Conf) parseNotifications(v string) (map[string]*conf.Notification, erro
 	return ns, nil
 }
 
+func ParseRuleConf(fpath string, backends conf.EnabledBackends, sysVars map[string]string) (*Conf, error) {
+	fileInfo, err := os.Stat(fpath)
+	if err != nil {
+		return nil, err
+	}
+	if fileInfo.IsDir() {
+		return ParseDirectory(fpath, backends, sysVars)
+	} else {
+		return ParseFile(fpath, backends, sysVars)
+	}
+}
+
 func ParseFile(fname string, backends conf.EnabledBackends, sysVars map[string]string) (*Conf, error) {
 	f, err := ioutil.ReadFile(fname)
 	if err != nil {
@@ -145,12 +157,10 @@ func ParseDirectory(dirname string, backends conf.EnabledBackends, sysVars map[s
 
 	configText := ""
 	for _, fpath := range files {
-		fmt.Println(fpath)
 		matchConf, err := filepath.Match("*.conf", filepath.Base(fpath))
 		if err != nil {
 			return nil, err
 		}
-		fmt.Println(matchConf)
 		if matchConf {
 			fc, err := ioutil.ReadFile(fpath)
 			if err != nil {
@@ -160,7 +170,6 @@ func ParseDirectory(dirname string, backends conf.EnabledBackends, sysVars map[s
 		}
 	}
 	c, err := NewConf("bosun.conf", backends, sysVars, configText)
-	fmt.Println(c)
 
 	return c, err
 }
