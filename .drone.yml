@@ -9,7 +9,7 @@ clone:
 
 pipeline:
   test:
-    image: golang:1.10.3-alpine
+    image: golang:1.11.5-stretch
     environment:
       - AWS_ACCESS_KEY_ID=$$CLOUDWATCH_ACCESSKEY
       - AWS_SECRET_ACCESS_KEY=$$CLOUDWATCH_SECRET_ACCESSKEY
@@ -18,7 +18,7 @@ pipeline:
       - go test -v bosun.org/...
 
   build_bosun:
-    image: golang:1.10.3-alpine
+    image: golang:1.11.5-stretch
     environment:
       - GOPATH=/go
     commands:
@@ -26,7 +26,7 @@ pipeline:
       - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bosun -tags esv5
 
   build_scollector:
-    image: golang:1.10.3-alpine
+    image: golang:1.11.5-stretch
     environment:
       - GOPATH=/go
     commands:
