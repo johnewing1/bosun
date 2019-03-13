@@ -1,6 +1,5 @@
 package rule
 
-
 import (
 	"encoding/json"
 	"fmt"
@@ -140,7 +139,6 @@ func ParseFile(fname string, backends conf.EnabledBackends, sysVars map[string]s
 	if err != nil {
 		return nil, err
 	}
-
 	return NewConf(fname, backends, sysVars, string(f))
 }
 
@@ -177,8 +175,6 @@ func ParseDirectory(dirname string, backends conf.EnabledBackends, sysVars map[s
 func (c *Conf) SaveConf(newConf *Conf) error {
 	return ioutil.WriteFile(c.Name, []byte(newConf.RawText), os.FileMode(int(0640)))
 }
-
-
 
 func NewConf(name string, backends conf.EnabledBackends, sysVars map[string]string, text string) (c *Conf, err error) {
 	defer errRecover(&err)
