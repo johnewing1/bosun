@@ -26,6 +26,7 @@ import (
 type Conf struct {
 	Vars conf.Vars
 	Name string // Config file name
+	RuleFilePath string
 
 	Templates     map[string]*conf.Template
 	Alerts        map[string]*conf.Alert
@@ -153,7 +154,7 @@ func ParseDirectory(dirname string, backends conf.EnabledBackends, sysVars map[s
 		return nil, err
 	}
 
-	configText := ""
+	configText := "### DIRECTORY-BASED ###"
 	for _, fpath := range files {
 		matchConf, err := filepath.Match("*.conf", filepath.Base(fpath))
 		if err != nil {
@@ -167,7 +168,7 @@ func ParseDirectory(dirname string, backends conf.EnabledBackends, sysVars map[s
 			configText += "\n### FROM " + fpath + "\n" + string(fc) + "\n### END " + fpath + "\n"
 		}
 	}
-	c, err := NewConf("bosun.conf", backends, sysVars, configText)
+	c, err := NewConf(dirname, backends, sysVars, configText)
 
 	return c, err
 }

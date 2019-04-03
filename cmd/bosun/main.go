@@ -222,7 +222,7 @@ func main() {
 		defer func() {
 			<-reloading
 		}()
-		newConf, err := rule.ParseFile(sysProvider.GetRuleFilePath(), sysProvider.EnabledBackends(), sysProvider.GetRuleVars())
+		newConf, err := rule.ParseRuleConf(sysProvider.GetRuleFilePath(), sysProvider.EnabledBackends(), sysProvider.GetRuleVars())
 		if err != nil {
 			return err
 		}

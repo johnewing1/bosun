@@ -515,8 +515,8 @@ bosunControllers.controller('ConfigCtrl', ['$scope', '$http', '$location', '$rou
 	}
 
 	$scope.downloadConfig = () => {
-		var blob = new Blob([$scope.config_text], { type: "text/plain;charset=utf-8" });
-		saveAs(blob, "bosun.conf");
+	        var blob = new Blob([$scope.config_text], { type: "text/plain;charset=utf-8" });
+	        saveAs(blob, "bosun.conf");
 	}
 
 	$scope.diffConfig = () => {
@@ -533,25 +533,56 @@ bosunControllers.controller('ConfigCtrl', ['$scope', '$http', '$location', '$rou
 				$scope.diff = "Failed to load diff: " + error;
 			});
 	}
+        function getConfigText() {
+            var rawText = $scope.config_text.split("\n");
+            var firstLine = rawText[0];
 
+            if (firstLine === "### DIRECTORY-BASED ###") {
+                var files = {};
+                var fileText = "";
+                for (var i = 1; i < rawText.length; i++) {
+                    var line = rawText[i]
 
+                    if (line.indexOf("### FROM") >= 0) {
+                        fileText = "";
+                    } else if (line.indexOf("### END ") >= 0) {
+                        var filename = line.substring(8)
+                        files[filename] = fileText.replace(/\n$/, "");
+                    } else {
+                        fileText += line + "\n";
+                    }
+                }
+                return files
+            } else {
+                return {"bosun.conf": $scope.config_text};
+            }
+        }
 	$scope.saveConfig = () => {
 		if (!$scope.saveEnabled) {
 			return;
 		}
-		$scope.saveResult = "Saving; Please Wait"
-		$http.post('/api/config/save', {
-			"Config": $scope.config_text,
-			"Diff": $scope.diff,
-			"Message": $scope.message
-		})
-			.success((data: any) => {
-				$scope.saveResult = "Config Saved; Reloading";
-				$scope.runningHash = undefined;
-			})
-			.error((error) => {
-				$scope.saveResult = error;
-			});
+                var configs = getConfigText();
+	        $scope.saveResult = "Saving; Please Wait"
+
+                for (var key in configs) {
+                    var fileText = configs[key];
+                    console.log(fileText);
+                    console.log($scope.diff);
+
+                    $http.post('/api/config/save', {
+                        "Filename": key,
+                        "Config": fileText,
+                        "Diff": $scope.diff,
+                        "Message": $scope.message
+                    })
+                        .success((data: any) => {
+                                $scope.saveResult = "Config Saved; Reloading";
+                                $scope.runningHash = undefined;
+                        })
+                        .error((error) => {
+                                $scope.saveResult = error;
+                        });
+                }
 	}
 
 	$scope.saveClass = () => {
