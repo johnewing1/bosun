@@ -48,6 +48,11 @@ var Elastic = map[string]parse.Func{
 		Return: models.TypeESIndexer,
 		F:      ESDaily,
 	},
+	"esweekly": {
+		Args:   []models.FuncType{models.TypeString, models.TypeString},
+		Return: models.TypeESIndexer,
+		F:      ESWeekly,
+	},
 	"esmonthly": {
 		Args:   []models.FuncType{models.TypeString, models.TypeString, models.TypeString},
 		Return: models.TypeESIndexer,

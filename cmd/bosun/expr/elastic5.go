@@ -311,6 +311,25 @@ func ESDaily(e *State, timeField, indexRoot, layout string) (*Results, error) {
 	return &r, nil
 }
 
+/* Generates index names for weekly indexes in the name-yyyy-ww format */
+func ESWeekly(e *State, timeField, indexRoot string) (*Results, error) {
+	var r Results
+	indexer := ESIndexer{}
+	indexer.TimeField = timeField
+	indexer.Generate = func(start, end *time.Time) []string {
+		var indices []string
+		truncStart := now.New(*start).Monday()
+		truncEnd := now.New(*end).Monday()
+		for d := truncStart; !d.After(truncEnd); d = d.AddDate(0, 0, 7) {
+			y, w := d.ISOWeek()
+			indices = append(indices, fmt.Sprintf("%s-%d.%d", indexRoot, y, w))
+		}
+		return indices
+	}
+	r.Results = append(r.Results, &Result{Value: indexer})
+	return &r, nil
+}
+
 func ESMonthly(e *State, timeField, indexRoot, layout string) (*Results, error) {
 	var r Results
 	indexer := ESIndexer{}
