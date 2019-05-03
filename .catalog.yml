@@ -1,0 +1,24 @@
+version: '1'
+type: microservice/lambda-function/web-app/third-party/stream-processing/library/other # https://confluence.skyscannertools.net/x/Q59YAw
+# extras:                                     # OPTIONAL (delete if not used)
+  # tags:                                     # OPTIONAL list of tags which this component will be searchable by. It can also include old names of your component.
+    # - UNKNOWN
+
+component:
+  name: UNKNOWN                               # please use a clear and descriptive name of this service.
+  owner:                                      # name of the squad that currently owns the component as defined in Prism/FlightDeck.
+    - UNKNOWN
+  description: UNKNOWN                        # short description of what your component does
+  awsProjectTag: UNKNOWN                      # the Self-Service project which is used to track costs for this component (remove if service not in AWS at all)
+  serviceClass: UNKNOWN                       # one of economy-class/first-class/business-class. More information here: https://confluence.skyscannertools.net/x/gAImAQ
+  personalDataHandling: UNKNOWN               # https://confluence.skyscannertools.net/x/CqcdBQ -- One of (collecting/storing/processing/none)
+  soxScope: UNKNOWN                           # https://confluence.skyscannertools.net/x/UDP8Bg -- One of (True/False)
+  paymentProcessing: UNKNOWN                  # https://confluence.skyscannertools.net/x/3ED8Bg -- One of (True/False)
+  # supportOverride:                          # OPTIONAL - the whole supportOverride section is optional for your component.
+  #   slackChannel: "#support"                # OPTIONAL - the support slack channel for the component. By default it will be taken from the owning squad's Prism details. Must be in quotes so that it's not parsed as a YAML comment
+  #   slackAlertsChannel: "#squadname-alerts" # OPTIONAL - Slack channel used to send alerts for the component. By default it will be taken from the owning squad's Prism details. Value must be in quotes so it's not parsed as a YAML comment.
+  #   jiraProject: JIRAJIRA                   # OPTIONAL - the id of the JIRA project that is used for managing this component's support tickets
+  #   confluenceUrl: "https://c.."            # OPTIONAL - a URL to docs of your component
+  # victorOps:                                # OPTIONAL - Required only for components with out of hours support. !The policy must be whitelisted in Chronos!
+  #   teamName: Elements                      # OPTIONAL - the VictorOps team name for the 24/7 support of that component
+  #   escalationPolicyName: CodeLift OOH      # OPTIONAL - the VictorOps escalation policy name for the 24/7 support of that component
