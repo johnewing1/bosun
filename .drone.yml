@@ -87,21 +87,21 @@ pipeline:
       event:
         exclude: [pull_request, tag]
 
-  sandbox_scollector:
-    image: plugins/s3
-    region: eu-west-1
-    bucket: skyscanner-sandbox-skymetrics-deploymentsupport
-    acl: bucket-owner-full-control
-    secrets:
-      - source: sandbox_accesskey
-        target: aws_access_key_id
-      - source: sandbox_secretkey
-        target: aws_secret_access_key
-    source: /go/src/bosun.org/cmd/scollector/scollector
-    target: /artifacts/scollector/${DRONE_TAG}/scollector
-    strip_prefix: /go/src/bosun.org/cmd/scollector/scollector
-    when:
-      event: tag
+  #sandbox_scollector:
+  #  image: plugins/s3
+  #  region: eu-west-1
+  #  bucket: skyscanner-sandbox-skymetrics-deploymentsupport
+  #  acl: bucket-owner-full-control
+  #  secrets:
+  #    - source: sandbox_accesskey
+  #      target: aws_access_key_id
+  #    - source: sandbox_secretkey
+  #      target: aws_secret_access_key
+  #  source: /go/src/bosun.org/cmd/scollector/scollector
+  #  target: /artifacts/scollector/${DRONE_TAG}/scollector
+  #  strip_prefix: /go/src/bosun.org/cmd/scollector/scollector
+  #  when:
+  #    event: tag
 
   prod_scollector:
     image: plugins/s3
