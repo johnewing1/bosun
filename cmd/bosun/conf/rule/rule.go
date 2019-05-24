@@ -6,6 +6,7 @@ import (
 	htemplate "html/template"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -25,6 +26,7 @@ import (
 type Conf struct {
 	Vars conf.Vars
 	Name string // Config file name
+	RuleFilePath string
 
 	Templates     map[string]*conf.Template
 	Alerts        map[string]*conf.Alert
@@ -121,12 +123,54 @@ func (c *Conf) parseNotifications(v string) (map[string]*conf.Notification, erro
 	return ns, nil
 }
 
+func ParseRuleConf(fpath string, backends conf.EnabledBackends, sysVars map[string]string) (*Conf, error) {
+	fileInfo, err := os.Stat(fpath)
+	if err != nil {
+		return nil, err
+	}
+	if fileInfo.IsDir() {
+		return ParseDirectory(fpath, backends, sysVars)
+	} else {
+		return ParseFile(fpath, backends, sysVars)
+	}
+}
+
 func ParseFile(fname string, backends conf.EnabledBackends, sysVars map[string]string) (*Conf, error) {
 	f, err := ioutil.ReadFile(fname)
 	if err != nil {
 		return nil, err
 	}
 	return NewConf(fname, backends, sysVars, string(f))
+}
+
+func ParseDirectory(dirname string, backends conf.EnabledBackends, sysVars map[string]string) (*Conf, error) {
+	var files []string
+	err := filepath.Walk(dirname,
+		func(path string, info os.FileInfo, err error) error {
+			files = append(files, path)
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	configText := "### DIRECTORY-BASED ###"
+	for _, fpath := range files {
+		matchConf, err := filepath.Match("*.conf", filepath.Base(fpath))
+		if err != nil {
+			return nil, err
+		}
+		if matchConf {
+			fc, err := ioutil.ReadFile(fpath)
+			if err != nil {
+				return nil, err
+			}
+			configText += "\n### FROM " + fpath + "\n" + string(fc) + "\n### END " + fpath + "\n"
+		}
+	}
+	c, err := NewConf(dirname, backends, sysVars, configText)
+
+	return c, err
 }
 
 func (c *Conf) SaveConf(newConf *Conf) error {
