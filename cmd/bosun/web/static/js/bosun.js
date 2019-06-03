@@ -908,7 +908,7 @@ bosunApp.component("usernameInput", {
     template: '<input type="text"class="form-control"  ng-disabled="ct.auth.Enabled()" ng-model="ct.auth.Username" ng-model-options="{ getterSetter: true }">'
 });
 /// <reference path="0-bosun.ts" />
-bosunControllers.controller('ConfigCtrl', ['$scope', '$http', '$location', '$route', '$timeout', '$sce', function ($scope, $http, $location, $route, $timeout, $sce) {
+bosunControllers.controller('ConfigCtrl', ['$q', '$scope', '$http', '$location', '$route', '$timeout', '$sce', function ($q, $scope, $http, $location, $route, $timeout, $sce) {
         var search = $location.search();
         $scope.fromDate = search.fromDate || '';
         $scope.fromTime = search.fromTime || '';
@@ -1383,16 +1383,18 @@ bosunControllers.controller('ConfigCtrl', ['$scope', '$http', '$location', '$rou
             }
             var configs = getConfigText();
             $scope.saveResult = "Saving; Please Wait";
+            var promises = [];
             for (var key in configs) {
                 var fileText = configs[key];
-                console.log(fileText);
-                console.log($scope.diff);
-                $http.post('/api/config/save', {
+                promises.push($http.post('/api/config/save', {
                     "Filename": key,
                     "Config": fileText,
                     "Diff": $scope.diff,
                     "Message": $scope.message
-                })
+                }));
+            }
+            $q.all(promises).then(function (success) {
+                $http.post('/api/reload', { "Reload": true })
                     .success(function (data) {
                     $scope.saveResult = "Config Saved; Reloading";
                     $scope.runningHash = undefined;
@@ -1400,7 +1402,9 @@ bosunControllers.controller('ConfigCtrl', ['$scope', '$http', '$location', '$rou
                     .error(function (error) {
                     $scope.saveResult = error;
                 });
-            }
+            }, function (error) {
+                $scope.saveResult = error.data;
+            });
         };
         $scope.saveClass = function () {
             if ($scope.saveResult == "Saving; Please Wait") {

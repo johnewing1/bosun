@@ -70,7 +70,7 @@ interface IConfigScope extends IBosunScope {
 	getRunningHash: () => void;
 }
 
-bosunControllers.controller('ConfigCtrl', ['$scope', '$http', '$location', '$route', '$timeout', '$sce', function ($scope: IConfigScope, $http: ng.IHttpService, $location: ng.ILocationService, $route: ng.route.IRouteService, $timeout: ng.ITimeoutService, $sce: ng.ISCEService) {
+bosunControllers.controller('ConfigCtrl', ['$q', '$scope', '$http', '$location', '$route', '$timeout', '$sce', function ($q: ng.IQService, $scope: IConfigScope, $http: ng.IHttpService, $location: ng.ILocationService, $route: ng.route.IRouteService, $timeout: ng.ITimeoutService, $sce: ng.ISCEService) {
 	var search = $location.search();
 	$scope.fromDate = search.fromDate || '';
 	$scope.fromTime = search.fromTime || '';
@@ -558,31 +558,35 @@ bosunControllers.controller('ConfigCtrl', ['$scope', '$http', '$location', '$rou
             }
         }
 	$scope.saveConfig = () => {
-		if (!$scope.saveEnabled) {
-			return;
-		}
-                var configs = getConfigText();
-	        $scope.saveResult = "Saving; Please Wait"
+	    if (!$scope.saveEnabled) {
+		return;
+	    }
+            var configs = getConfigText();
+	    $scope.saveResult = "Saving; Please Wait"
 
-                for (var key in configs) {
-                    var fileText = configs[key];
-                    console.log(fileText);
-                    console.log($scope.diff);
+            var promises = []
+            for (var key in configs) {
+                var fileText = configs[key];
 
-                    $http.post('/api/config/save', {
-                        "Filename": key,
-                        "Config": fileText,
-                        "Diff": $scope.diff,
-                        "Message": $scope.message
+                promises.push($http.post('/api/config/save', {
+                    "Filename": key,
+                    "Config": fileText,
+                    "Diff": $scope.diff,
+                    "Message": $scope.message
+                }));
+            }
+            $q.all(promises).then(function(success) {
+                $http.post('/api/reload', {"Reload": true})
+                    .success((data: any) => {
+                        $scope.saveResult = "Config Saved; Reloading";
+                        $scope.runningHash = undefined;
                     })
-                        .success((data: any) => {
-                                $scope.saveResult = "Config Saved; Reloading";
-                                $scope.runningHash = undefined;
-                        })
-                        .error((error) => {
-                                $scope.saveResult = error;
-                        });
-                }
+                    .error((error) => {
+                        $scope.saveResult = error;
+                    });
+            }, function(error) {
+                $scope.saveResult = error.data;
+            });
 	}
 
 	$scope.saveClass = () => {
