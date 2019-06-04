@@ -1,10 +1,13 @@
 package web
 
 import (
+	"errors"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"net/http"
 	"os"
+	"strings"
 	"io/ioutil"
 
 	"bosun.org/cmd/bosun/conf"
@@ -29,6 +32,24 @@ func SaveConfig(t miniprofiler.Timer, w http.ResponseWriter, r *http.Request) (i
 		return nil, nil
 	} else if data.User == "" {
 		data.User = getUsername(r)
+	}
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	currentPath, err := filepath.Abs(currentDir)
+	if err != nil {
+		return nil, err
+	}
+	dataFilePath, err := filepath.Abs(data.Filename)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.HasPrefix(dataFilePath, currentPath) {
+		return nil, errors.New("Failed to save file outside of bosun directory: " + data.Filename)
+	}
+	if filepath.Ext(dataFilePath) != ".conf" {
+		return nil, errors.New("Failed to save non .conf config file: " + data.Filename)
 	}
 	backup, err := ioutil.ReadFile(data.Filename)
 	if err != nil {

@@ -9,6 +9,7 @@ interface IConfigScope extends IBosunScope {
 	editor: any;
 	validate: () => void;
 	validationResult: string;
+	saveWarning: string;
 	saveResult: string;
 	selectAlert: (alert: string) => void;
 	reparse: () => void;
@@ -543,11 +544,17 @@ bosunControllers.controller('ConfigCtrl', ['$q', '$scope', '$http', '$location',
                 for (var i = 1; i < rawText.length; i++) {
                     var line = rawText[i]
 
-                    if (line.indexOf("### FROM") >= 0) {
+                    if (line.indexOf("### FROM ") >= 0) {
+                        var fromFilename = line.substring(9)
                         fileText = "";
                     } else if (line.indexOf("### END ") >= 0) {
                         var filename = line.substring(8)
-                        files[filename] = fileText.replace(/\n$/, "");
+                        if (fromFilename !== filename) {
+                            $scope.saveWarning = "Config filenames FROM: " + fromFilename +
+                                ", END: " + filename + " do not match."
+                        } else {
+                            files[filename] = fileText.replace(/\n$/, "");
+                        }
                     } else {
                         fileText += line + "\n";
                     }
