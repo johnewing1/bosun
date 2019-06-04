@@ -551,7 +551,7 @@ bosunControllers.controller('ConfigCtrl', ['$q', '$scope', '$http', '$location',
                         var filename = line.substring(8)
                         if (fromFilename !== filename) {
                             $scope.saveWarning = "Config filenames FROM: " + fromFilename +
-                                ", END: " + filename + " do not match."
+                                ", END: " + filename + " do not match. Not saving this file."
                         } else {
                             files[filename] = fileText.replace(/\n$/, "");
                         }
