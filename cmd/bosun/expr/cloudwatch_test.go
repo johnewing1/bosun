@@ -96,6 +96,30 @@ func TestCloudWatchQuery(t *testing.T) {
 		}
 	}
 }
+func TestCloudWatchQueryWithoutDimensions(t *testing.T) {
+	c := cloudwatch.NewConfig()
+	svc := new(mockCloudWatchClient)
+	c.Profiles["bosun-default"] = svc
+	e := State{
+		now: time.Date(2018, time.January, 1, 0, 0, 0, 0, time.UTC),
+		Backends: &Backends{
+			CloudWatchContext: c,
+		},
+		BosunProviders: &BosunProviders{
+			Squelched: func(tags opentsdb.TagSet) bool {
+				return false
+			},
+		},
+		Timer: new(miniprofiler.Profile),
+	}
+
+	results, err := CloudWatchQuery("default", &e, "eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Sum", " ", "2h", "1h")
+	if err != nil {
+		t.Errorf("Query Failure: %s ", err)
+	} else if results.Results[0].Group.String() != "{}" {
+		t.Errorf("Dimensions not parsed correctly, expected '%s' , got '%s' ", "{}", results.Results[0].Group.String())
+	}
+}
 func TestCloudWatchTagQuery(t *testing.T) {
 	var tests = []struct {
 		dimensions string
