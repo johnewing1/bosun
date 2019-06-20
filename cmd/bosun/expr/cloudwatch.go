@@ -67,6 +67,9 @@ func parseCloudWatchResponse(req *cloudwatch.Request, s *cloudwatch.Response) ([
 
 func parseDimensions(dimensions string) []cloudwatch.Dimension {
 	parsed := make([]cloudwatch.Dimension, 0)
+	if len(strings.TrimSpace(dimensions)) == 0 {
+		return parsed
+	}
 	dims := strings.Split(dimensions, ",")
 	for _, row := range dims {
 		dim := strings.Split(row, ":")
