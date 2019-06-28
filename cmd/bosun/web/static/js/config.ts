@@ -163,7 +163,7 @@ bosunControllers.controller('ConfigCtrl', ['$q', '$scope', '$http', '$location',
 		return items;
 	}
 
-	$http.get('/api/config?hash=' + (search.hash || ''))
+	$http.get('/api/config?hash=' + encodeURIComponent(search.hash || ''))
 		.success((data: any) => {
 			$scope.config_text = data;
 			$scope.items = parseItems();

@@ -247,6 +247,7 @@ func ExprGraph(t miniprofiler.Timer, w http.ResponseWriter, r *http.Request) (in
 		ElasticHosts:      schedule.SystemConf.GetElasticContext(),
 		AzureMonitor:      schedule.SystemConf.GetAzureMonitorContext(),
 		CloudWatchContext: schedule.SystemConf.GetCloudWatchContext(),
+		PromConfig:      schedule.SystemConf.GetPromContext(),
 	}
 	providers := &expr.BosunProviders{
 		Cache:     cacheObj,
@@ -255,7 +256,7 @@ func ExprGraph(t miniprofiler.Timer, w http.ResponseWriter, r *http.Request) (in
 		Squelched: nil,
 		History:   nil,
 	}
-	res, _, err := e.Execute(backends, providers, t, now, autods, false, nil)
+	res, _, err := e.Execute(backends, providers, t, now, autods, false, "Web: chart creation", nil)
 	if err != nil {
 		return nil, err
 	}

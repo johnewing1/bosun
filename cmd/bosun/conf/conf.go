@@ -43,9 +43,11 @@ type SystemConfProvider interface {
 	GetEmailFrom() string
 	GetLedisDir() string
 	GetLedisBindAddr() string
-	GetRedisHost() string
+	GetRedisHost() []string
+	GetRedisMasterName() string
 	GetRedisDb() int
 	GetRedisPassword() string
+	IsRedisClientSetName() bool
 	GetTimeAndDate() []int
 	GetSearchSince() time.Duration
 
@@ -83,6 +85,7 @@ type SystemConfProvider interface {
 	GetElasticContext() expr.ElasticHosts
 	GetAzureMonitorContext() expr.AzureMonitorClients
 	GetCloudWatchContext() cloudwatch.Context
+	GetPromContext() expr.PromClients
 	AnnotateEnabled() bool
 
 	MakeLink(string, *url.Values) string
