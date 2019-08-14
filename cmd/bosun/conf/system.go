@@ -15,6 +15,11 @@ import (
 	"bosun.org/cmd/bosun/expr"
 	"bosun.org/graphite"
 	"bosun.org/opentsdb"
+	ainsightsmgmt "github.com/Azure/azure-sdk-for-go/services/appinsights/mgmt/2015-05-01/insights"
+	ainsights "github.com/Azure/azure-sdk-for-go/services/appinsights/v1/insights"
+	promapi "github.com/prometheus/client_golang/api"
+	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
+
 	"github.com/Azure/azure-sdk-for-go/services/preview/monitor/mgmt/2018-03-01/insights"
 	"github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2018-02-01/resources"
 	"github.com/Azure/go-autorest/autorest"
@@ -60,6 +65,7 @@ type SystemConf struct {
 	ElasticConf      map[string]ElasticConf
 	AzureMonitorConf map[string]AzureMonitorConf
 	CloudWatchConf   CloudWatchConf
+	PromConf         map[string]PromConf
 
 	AnnotateConf AnnotateConf
 
@@ -84,10 +90,10 @@ type EnabledBackends struct {
 	Graphite     bool
 	Influx       bool
 	Elastic      bool
-	Logstash     bool
 	Annotate     bool
 	AzureMonitor bool
 	CloudWatch   bool
+	Prom         bool
 }
 
 // EnabledBackends returns and EnabledBackends struct which contains fields
@@ -97,6 +103,7 @@ func (sc *SystemConf) EnabledBackends() EnabledBackends {
 	b.OpenTSDB = sc.OpenTSDBConf.Host != ""
 	b.Graphite = sc.GraphiteConf.Host != ""
 	b.Influx = sc.InfluxConf.URL != ""
+	b.Prom = sc.PromConf["default"].URL != ""
 	b.Elastic = len(sc.ElasticConf["default"].Hosts) != 0
 	b.Annotate = len(sc.AnnotateConf.Hosts) != 0
 	b.AzureMonitor = len(sc.AzureMonitorConf) != 0
@@ -122,7 +129,8 @@ type GraphiteConf struct {
 
 // AnnotateConf contains the elastic configuration to enable Annotations support
 type AnnotateConf struct {
-	Hosts         []string        // CSV of Elastic Hosts, currently the only backend in annotate
+	Hosts         []string // CSV of Elastic Hosts, currently the only backend in annotate
+	Version       string
 	SimpleClient  bool            // If true ES will connect over NewSimpleClient
 	ClientOptions ESClientOptions // ES client options
 	Index         string          // name of index / table
@@ -149,11 +157,7 @@ type ESClientOptions struct {
 }
 
 // ElasticConf contains configuration for an elastic host that Bosun can query
-type ElasticConf struct {
-	Hosts         []string
-	SimpleClient  bool
-	ClientOptions ESClientOptions
-}
+type ElasticConf AnnotateConf
 
 // AzureConf contains configuration for an Azure metrics
 type AzureMonitorConf struct {
@@ -210,11 +214,33 @@ type InfluxConf struct {
 	Precision string
 }
 
+// PromConf contains configuration for a Prometheus TSDB that Bosun can query
+type PromConf struct {
+	URL string
+}
+
+// Valid returns if the configuration for the PromConf has required fields needed
+// to create a prometheus tsdb client
+func (pc PromConf) Valid() error {
+	if pc.URL == "" {
+		return fmt.Errorf("missing URL field")
+	}
+	// NewClient makes sure the url is valid, no connections are made in this call
+	_, err := promapi.NewClient(promapi.Config{Address: pc.URL})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // DBConf stores the connection information for Bosun's internal storage
 type DBConf struct {
-	RedisHost     string
-	RedisDb       int
-	RedisPassword string
+	RedisHost          string
+	RedisDb            int
+	RedisPassword      string
+	RedisClientSetName bool
+	RedisSentinels     []string
+	RedisMasterName    string
 
 	LedisDir      string
 	LedisBindAddr string
@@ -296,8 +322,9 @@ func newSystemConf() *SystemConf {
 		HTTPListen:             defaultHTTPListen,
 		AlertCheckDistribution: "",
 		DBConf: DBConf{
-			LedisDir:      "ledis_data",
-			LedisBindAddr: "127.0.0.1:9565",
+			LedisDir:           "ledis_data",
+			LedisBindAddr:      "127.0.0.1:9565",
+			RedisClientSetName: true,
 		},
 		MinGroupSize: 5,
 		PingDuration: Duration{Duration: time.Hour * 24},
@@ -356,6 +383,13 @@ func loadSystemConfig(conf string, isFileName bool) (*SystemConf, error) {
 	for prefix, conf := range sc.AzureMonitorConf {
 		if err := conf.Valid(); err != nil {
 			return sc, fmt.Errorf(`error in configuration for Azure client "%v": %v`, prefix, err)
+		}
+	}
+
+	// Check Prometheus Monitor Configurations
+	for prefix, conf := range sc.PromConf {
+		if err := conf.Valid(); err != nil {
+			return sc, fmt.Errorf(`error in configuration for Prometheus client "%v": %v`, prefix, err)
 		}
 	}
 
@@ -431,8 +465,20 @@ func (sc *SystemConf) GetLedisBindAddr() string {
 
 // GetRedisHost returns the host to use for Redis. If this is set than Redis
 // will be used instead of Ledis.
-func (sc *SystemConf) GetRedisHost() string {
-	return sc.DBConf.RedisHost
+func (sc *SystemConf) GetRedisHost() []string {
+	if sc.GetRedisMasterName() != "" {
+		return sc.DBConf.RedisSentinels
+	}
+	if sc.DBConf.RedisHost != "" {
+		return []string{sc.DBConf.RedisHost}
+	}
+	return []string{}
+}
+
+// GetRedisMasterName returns master name of redis instance within sentinel.
+// If this is return none empty string redis sentinel will be used
+func (sc *SystemConf) GetRedisMasterName() string {
+	return sc.DBConf.RedisMasterName
 }
 
 // GetRedisDb returns the redis database number to use
@@ -443,6 +489,11 @@ func (sc *SystemConf) GetRedisDb() int {
 // GetRedisPassword returns the password that should be used to connect to redis
 func (sc *SystemConf) GetRedisPassword() string {
 	return sc.DBConf.RedisPassword
+}
+
+// RedisClientSetName returns if CLIENT SETNAME shoud send to redis.
+func (sc *SystemConf) IsRedisClientSetName() bool {
+	return sc.DBConf.RedisClientSetName
 }
 
 func (sc *SystemConf) GetAuthConf() *AuthConf {
@@ -627,31 +678,48 @@ func (sc *SystemConf) GetCloudWatchContext() cloudwatch.Context {
 	return c
 }
 
+// GetPromContext initializes returns a collection of Prometheus API v1 client APIs (connections)
+// from the configuration
+func (sc *SystemConf) GetPromContext() expr.PromClients {
+	clients := make(expr.PromClients)
+	for prefix, conf := range sc.PromConf {
+		// Error is checked in validation (PromConf Valid())
+		client, _ := promapi.NewClient(promapi.Config{Address: conf.URL})
+		clients[prefix] = promv1.NewAPI(client)
+	}
+	return clients
+}
+
 // GetElasticContext returns an Elastic context which contains all the information
 // needed to run Elastic queries.
 func (sc *SystemConf) GetElasticContext() expr.ElasticHosts {
 	return parseESConfig(sc)
 }
 
-// GetAzureMonitorContext returns a Azure Monitor API context which
-// contains the information needs to query the azure API
+// GetAzureMonitorContext returns a the collection of API clients needed
+// query the Azure Monitor and Application Insights APIs
 func (sc *SystemConf) GetAzureMonitorContext() expr.AzureMonitorClients {
 	allClients := make(expr.AzureMonitorClients)
 	for prefix, conf := range sc.AzureMonitorConf {
-		clients := expr.AzureMonitorClientCollection{}
+		cc := expr.AzureMonitorClientCollection{}
+		cc.TenantId = conf.TenantId
 		if conf.Concurrency == 0 {
-			clients.Concurrency = 10
+			cc.Concurrency = 10
 		} else {
-			clients.Concurrency = conf.Concurrency
+			cc.Concurrency = conf.Concurrency
 		}
-		clients.MetricsClient = insights.NewMetricsClient(conf.SubscriptionId)
-		clients.MetricDefinitionsClient = insights.NewMetricDefinitionsClient(conf.SubscriptionId)
-		clients.ResourcesClient = resources.NewClient(conf.SubscriptionId)
+		cc.MetricsClient = insights.NewMetricsClient(conf.SubscriptionId)
+		cc.MetricDefinitionsClient = insights.NewMetricDefinitionsClient(conf.SubscriptionId)
+		cc.ResourcesClient = resources.NewClient(conf.SubscriptionId)
+		cc.AIComponentsClient = ainsightsmgmt.NewComponentsClient(conf.SubscriptionId)
+		cc.AIMetricsClient = ainsights.NewMetricsClient()
 		if conf.DebugRequest {
-			clients.ResourcesClient.RequestInspector, clients.MetricsClient.RequestInspector, clients.MetricDefinitionsClient.RequestInspector = azureLogRequest(), azureLogRequest(), azureLogRequest()
+			cc.ResourcesClient.RequestInspector, cc.MetricsClient.RequestInspector, cc.MetricDefinitionsClient.RequestInspector = azureLogRequest(), azureLogRequest(), azureLogRequest()
+			cc.AIComponentsClient.RequestInspector, cc.AIMetricsClient.RequestInspector = azureLogRequest(), azureLogRequest()
 		}
 		if conf.DebugResponse {
-			clients.ResourcesClient.ResponseInspector, clients.MetricsClient.ResponseInspector, clients.MetricDefinitionsClient.ResponseInspector = azureLogResponse(), azureLogResponse(), azureLogResponse()
+			cc.ResourcesClient.ResponseInspector, cc.MetricsClient.ResponseInspector, cc.MetricDefinitionsClient.ResponseInspector = azureLogResponse(), azureLogResponse(), azureLogResponse()
+			cc.AIComponentsClient.ResponseInspector, cc.AIMetricsClient.ResponseInspector = azureLogResponse(), azureLogResponse()
 		}
 		ccc := auth.NewClientCredentialsConfig(conf.ClientId, conf.ClientSecret, conf.TenantId)
 		at, err := ccc.Authorizer()
@@ -660,8 +728,16 @@ func (sc *SystemConf) GetAzureMonitorContext() expr.AzureMonitorClients {
 			// This is checked before because this method is not called until the an expression is called
 			slog.Error("unexpected Azure Authorizer error: ", err)
 		}
-		clients.MetricsClient.Authorizer, clients.MetricDefinitionsClient.Authorizer, clients.ResourcesClient.Authorizer = at, at, at
-		allClients[prefix] = clients
+		// Application Insights needs a different authorizer to use the other Resource "api.application..."
+		rcc := auth.NewClientCredentialsConfig(conf.ClientId, conf.ClientSecret, conf.TenantId)
+		rcc.Resource = "https://api.applicationinsights.io"
+		rat, err := rcc.Authorizer()
+		if err != nil {
+			slog.Error("unexpected application insights azure authorizer error: ", err)
+		}
+		cc.MetricsClient.Authorizer, cc.MetricDefinitionsClient.Authorizer, cc.ResourcesClient.Authorizer = at, at, at
+		cc.AIComponentsClient.Authorizer, cc.AIMetricsClient.Authorizer = at, rat
+		allClients[prefix] = cc
 	}
 	return allClients
 }

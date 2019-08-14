@@ -52,6 +52,14 @@ construct links.
 Example:
 `Hostname = "bosun.example.com"`
 
+### Scheme
+The URL that Bosun uses to construct its links. The common use case
+is in any [template functions](/definitions#template-functions) that
+construct links. the default is "http"
+
+Example:
+`Scheme = "https"`
+
 ### HTTPListen
 HTTP IP and Port to listen on. The default if not specified is to
 listen on `:8070`. However, if `HTTPSListen` is defined and `HTTPListen`
@@ -252,6 +260,11 @@ recommended for production setups.
 
 The default is to use ledis. If Both Redis and ledis are defined, Redis will take preference and the ledis configuration will be ignored. Ledis is the default, so if `RedisHost` is not specified ledis will be used even if you have no `DBConf` configuration defined.
 
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Upgrading the database to newer versions only works with redis. With ledis you will have to delete the database to use a new version that involves a migration (schema upgrade) to the db.</p>
+</div>
+
 #### RedisHost
 The Redis hostname and port.
 
@@ -260,6 +273,16 @@ Optional integer database to store bosun data.  Defaults to 0.
 
 #### RedisPassword
 Optional password to use when connecting to Redis.
+
+#### RedisClentSetName
+Optional key defining the sending of client's name `bosun` to Redis. Defaults to true.
+If you use Netflix/dynomite then RedisClentSetName must be set to false.
+
+#### RedisSentinels
+The redis sentinels list. Redis sentinel list will be used only if parameter `RedisMasterName` was set as well 
+
+#### RedisMasterName
+The redis master name within sentinel. If it is set bosun will use sentinel to receive information about cuurrent redis master.
 
 #### LedisDir
 Directory in which ledis will store data. Default: `LedisDir = "ledis_data"`
@@ -295,9 +318,10 @@ Address from which emails will be sent.
 Outgoing SMTP server hostname or IP address.
 
 #### Username
-(TODO: See how this and Password is used with email auth, don't have a current example.)
+SMTP username
 
 #### Password
+SMTP password
 
 #### Example
 
@@ -305,6 +329,8 @@ Outgoing SMTP server hostname or IP address.
 [SMTPConf]
 	EmailFrom = "bosun@example.com"
 	Host = "mail.example.com"
+	Username = "username"
+	Password = "fe8h392wh"
 ```
 
 ### AzureMonitorConf
@@ -395,11 +421,6 @@ log formatted data and stats from those logs.
 The functions that would allow you to use Elastic effectively as a
 time-series based backend do not currently exist.
 
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>The Elastic config format may change before the final 0.6.0 release.</a>.</p>
-</div>
-
 #### ElasticConf.default
 Default cluster to query when [PrefixKey](/expressions#prefixkey) is not
 passed to the [elastic expression
@@ -463,6 +484,23 @@ Graphite request.
 	Host = "localhost:80"
 	[GraphiteConf.Headers]
 		X-Meow = "Mix"
+```
+
+### PromConf
+Enables querying multiple [Prometheus TSDBs](https://prometheus.io/docs/introduction/overview/) via the Prometheus HTTP v1 endpoint. The [Prometheus Query Expression
+Functions](/expressions#prometheus-query-functions) become available when this is defined.
+
+#### PromConf.default
+Default cluster to query when [PrefixKey](/expressions#prefixkey-2) is not passed to the [prometheus query functions](/expressions#prometheus-query-functions).
+
+#### Example
+
+```
+[PromConf]
+    [PromConf.default]
+        URL = "https://prometheus.kubea.example.com"
+    [PromConf.kubeb]
+        URL = "https://prometheus.kubeb.example.com"
 ```
 
 ### AnnotateConf

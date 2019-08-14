@@ -88,6 +88,7 @@ func Expr(t miniprofiler.Timer, w http.ResponseWriter, r *http.Request) (v inter
 		ElasticHosts:      schedule.SystemConf.GetElasticContext(),
 		AzureMonitor:      schedule.SystemConf.GetAzureMonitorContext(),
 		CloudWatchContext: schedule.SystemConf.GetCloudWatchContext(),
+		PromConfig:      schedule.SystemConf.GetPromContext(),
 	}
 	providers := &expr.BosunProviders{
 		Cache:     cacheObj,
@@ -97,7 +98,7 @@ func Expr(t miniprofiler.Timer, w http.ResponseWriter, r *http.Request) (v inter
 		Annotate:  AnnotateBackend,
 	}
 	httpHeader := opentsdb.CreateForwardHeader(r)
-	res, queries, err := e.Execute(backends, providers, t, now, 0, false, httpHeader)
+	res, queries, err := e.Execute(backends, providers, t, now, 0, false, "Web: expression execution", httpHeader)
 	if err != nil {
 		return nil, err
 	}
@@ -212,6 +213,12 @@ func procRule(t miniprofiler.Timer, ruleConf conf.RuleConfProvider, a *conf.Aler
 		}
 		var errs []error
 		primaryIncident.Id = int64(incidentID)
+		// See if the incidentID corresponds to a real Incident, and if so
+		// get some information from the real incident
+		if realIncident, err := schedule.DataAccess.State().GetIncidentState(primaryIncident.Id); err == nil {
+			primaryIncident.PreviousIds = realIncident.PreviousIds
+		}
+
 		primaryIncident.Start = time.Now().UTC()
 		primaryIncident.CurrentStatus = e.Status
 		primaryIncident.LastAbnormalStatus = e.Status
@@ -249,7 +256,7 @@ func procRule(t miniprofiler.Timer, ruleConf conf.RuleConfProvider, a *conf.Aler
 			}
 			n.PrepareAlert(rt, string(primaryIncident.AlertKey), rt.Attachments...).Send(s.SystemConf)
 		}
-		nots, aNots = buildNotificationPreviews(a, rt, primaryIncident, s.SystemConf)
+		nots, aNots = buildNotificationPreviews(a, rt, primaryIncident, s.SystemConf, ruleConf)
 		data = s.Data(rh, primaryIncident, a, false)
 	}
 
@@ -268,7 +275,7 @@ func procRule(t miniprofiler.Timer, ruleConf conf.RuleConfProvider, a *conf.Aler
 	return rr, nil
 }
 
-func buildNotificationPreviews(a *conf.Alert, rt *models.RenderedTemplates, incident *models.IncidentState, c conf.SystemConfProvider, attachments ...*models.Attachment) (map[string]*conf.PreparedNotifications, map[string]map[string]*conf.PreparedNotifications) {
+func buildNotificationPreviews(a *conf.Alert, rt *models.RenderedTemplates, incident *models.IncidentState, c conf.SystemConfProvider, rcp conf.RuleConfProvider, attachments ...*models.Attachment) (map[string]*conf.PreparedNotifications, map[string]map[string]*conf.PreparedNotifications) {
 	previews := map[string]*conf.PreparedNotifications{}
 	actionPreviews := map[string]map[string]*conf.PreparedNotifications{}
 	nots := map[string]*conf.Notification{}
@@ -289,7 +296,7 @@ func buildNotificationPreviews(a *conf.Alert, rt *models.RenderedTemplates, inci
 				continue
 			}
 			incidents := []*models.IncidentState{incident}
-			actions[at.String()] = not.PrepareAction(at, a.Template, c, incidents, "somebody", "I took care of this")
+			actions[at.String()] = not.PrepareAction(at, a.Template, c, incidents, "somebody", "I took care of this", rcp)
 		}
 	}
 	return previews, actionPreviews
