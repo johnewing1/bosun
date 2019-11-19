@@ -119,7 +119,11 @@ func NewConfig() *Config {
 // Query performs a cloudwatch request to aws.
 func (c Config) Query(r *Request) (Response, error) {
 	var profile string
-	var conf aws.Config
+	enableVerboseLogging := true
+	conf :=  aws.Config{
+		CredentialsChainVerboseErrors: &enableVerboseLogging,
+	}
+
 	if r.Profile == "default" {
 		profile = "bosun-default"
 	} else {
