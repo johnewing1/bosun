@@ -53,7 +53,7 @@ func buildDatapoint(t *time.Time) (point *cw.Datapoint, err error) {
 }
 
 func TestCloudWatchQuery(t *testing.T) {
-	c := cloudwatch.NewConfig()
+	c := cloudwatch.GetConfig()
 	svc := new(mockCloudWatchClient)
 	c.Profiles["bosun-default"] = svc
 	e := State{
@@ -97,7 +97,7 @@ func TestCloudWatchQuery(t *testing.T) {
 	}
 }
 func TestCloudWatchQueryWithoutDimensions(t *testing.T) {
-	c := cloudwatch.NewConfig()
+	c := cloudwatch.GetConfig()
 	svc := new(mockCloudWatchClient)
 	c.Profiles["bosun-default"] = svc
 	e := State{

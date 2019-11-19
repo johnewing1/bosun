@@ -4,6 +4,7 @@ package cloudwatch // import "bosun.org/cloudwatch"
 import (
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"bosun.org/slog"
@@ -15,6 +16,11 @@ import (
 )
 
 const requestErrFmt = "cloudwatch RequestError (%s): %s"
+
+var (
+	once   sync.Once
+	config *Config
+)
 
 // Request holds query objects. Currently only absolute times are supported.
 type Request struct {
@@ -110,10 +116,12 @@ type Config struct {
 	Profiles map[string]cwi.CloudWatchAPI
 }
 
-func NewConfig() *Config {
-	c := new(Config)
-	c.Profiles = make(map[string]cwi.CloudWatchAPI)
-	return c
+func GetConfig() *Config {
+	once.Do(func() {
+		config = new(Config)
+		config.Profiles = make(map[string]cwi.CloudWatchAPI)
+	})
+	return config
 }
 
 // Query performs a cloudwatch request to aws.
