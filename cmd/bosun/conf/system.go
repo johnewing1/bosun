@@ -674,7 +674,7 @@ func (sc *SystemConf) GetInfluxContext() client.HTTPConfig {
 }
 
 func (sc *SystemConf) GetCloudWatchContext() cloudwatch.Context {
-	c := cloudwatch.GetConfig()
+	c := cloudwatch.GetContext()
 	return c
 }
 
