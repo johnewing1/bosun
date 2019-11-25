@@ -8,13 +8,19 @@ import (
 	"bosun.org/cloudwatch"
 	"bosun.org/cmd/bosun/expr/parse"
 	"bosun.org/opentsdb"
+	"github.com/MiniProfiler/go/miniprofiler"
 	cw "github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
-	"github.com/MiniProfiler/go/miniprofiler"
 )
 
 type mockCloudWatchClient struct {
 	cloudwatchiface.CloudWatchAPI
+}
+
+type mockProfileProvider struct{}
+
+func (m *mockProfileProvider) NewProfile(name, region string) cloudwatchiface.CloudWatchAPI {
+	return &mockCloudWatchClient{}
 }
 
 func (m *mockCloudWatchClient) GetMetricStatistics(input *cw.GetMetricStatisticsInput) (output *cw.GetMetricStatisticsOutput, err error) {
@@ -53,9 +59,7 @@ func buildDatapoint(t *time.Time) (point *cw.Datapoint, err error) {
 }
 
 func TestCloudWatchQuery(t *testing.T) {
-	c := cloudwatch.NewConfig()
-	svc := new(mockCloudWatchClient)
-	c.Profiles["bosun-default"] = svc
+	c := cloudwatch.GetContextWithProvider(&mockProfileProvider{})
 	e := State{
 		now: time.Date(2018, time.January, 1, 0, 0, 0, 0, time.UTC),
 		Backends: &Backends{
@@ -97,9 +101,7 @@ func TestCloudWatchQuery(t *testing.T) {
 	}
 }
 func TestCloudWatchQueryWithoutDimensions(t *testing.T) {
-	c := cloudwatch.NewConfig()
-	svc := new(mockCloudWatchClient)
-	c.Profiles["bosun-default"] = svc
+	c := cloudwatch.GetContextWithProvider(&mockProfileProvider{})
 	e := State{
 		now: time.Date(2018, time.January, 1, 0, 0, 0, 0, time.UTC),
 		Backends: &Backends{
