@@ -419,7 +419,7 @@ func ESWeekly(e *State, timeField, indexRoot string) (*Results, error) {
 		truncEnd := now.New(*end).Monday()
 		for d := truncStart; !d.After(truncEnd); d = d.AddDate(0, 0, 7) {
 			y, w := d.ISOWeek()
-			indices = append(indices, fmt.Sprintf("%s-%d.%d", indexRoot, y, w))
+			indices = append(indices, fmt.Sprintf("%s-%d.%02d", indexRoot, y, w))
 		}
 		return indices
 	}

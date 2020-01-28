@@ -31,7 +31,7 @@ func Test_Weeklies(t *testing.T) {
 		/* turn of year */
 		{time.Date(2018, 12, 30, 17, 0, 0, 0, time.UTC),
 			time.Date(2019, 1, 20, 17, 0, 0, 0, time.UTC),
-			[]string{"logstash-2018.52", "logstash-2019.1", "logstash-2019.2", "logstash-2019.3"},
+			[]string{"logstash-2018.52", "logstash-2019.01", "logstash-2019.02", "logstash-2019.03"},
 		},
 		/* sunday to monday */
 		{time.Date(2019, 4, 7, 0, 0, 0, 0, time.UTC),
@@ -43,9 +43,14 @@ func Test_Weeklies(t *testing.T) {
 			time.Date(2019, 4, 14, 0, 0, 0, 0, time.UTC),
 			[]string{"logstash-2019.15"},
 		},
+		// week padding
+		{time.Date(2020, 2, 17, 0, 0, 0, 0, time.UTC),
+			time.Date(2020, 3, 2, 0, 0, 0, 0, time.UTC),
+			[]string{"logstash-2020.08", "logstash-2020.09", "logstash-2020.10"},
+		},
 	}
 	/* get an instance of the weekly generator */
-	results, err := ESWeekly(&e, "@timestamp", "logstash");
+	results, err := ESWeekly(&e, "@timestamp", "logstash")
 	if err != nil {
 		t.Errorf("Failed to get generator: %s ", err)
 	} else if results.Results[0].Value != nil {
@@ -56,7 +61,7 @@ func Test_Weeklies(t *testing.T) {
 
 		} else {
 			for _, x := range tests {
-				index_list := f.Generate(&x.start, &x.end);
+				index_list := f.Generate(&x.start, &x.end)
 				assert.Equal(t, x.expected, index_list)
 			}
 
