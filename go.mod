@@ -18,7 +18,7 @@ require (
 	github.com/alicebob/gopher-json v0.0.0-20180125190556-5a6b3ba71ee6 // indirect
 	github.com/alicebob/miniredis v2.5.0+incompatible // indirect
 	github.com/andybalholm/cascadia v0.0.0-20150730174459-3ad29d1ad1c4 // indirect
-	github.com/aws/aws-sdk-go v1.1.33
+	github.com/aws/aws-sdk-go v1.29.3
 	github.com/aymerick/douceur v0.2.1-0.20150827151352-7176f1467381
 	github.com/bosun-monitor/statusio v0.0.0-20160516160816-ab1583139762
 	github.com/bradfitz/slice v0.0.0-20140430145140-a665b5dbaad5
@@ -67,7 +67,6 @@ require (
 	github.com/mjibson/esc v0.1.0
 	github.com/olivere/elastic v6.1.23-0.20180523141205-33ad30f61610+incompatible
 	github.com/pelletier/go-toml v1.6.0 // indirect
-	github.com/pkg/errors v0.8.1-0.20170505043639-c605e284fe17 // indirect
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/prometheus/client_golang v0.9.3-0.20190106165022-d2ead2588477
 	github.com/prometheus/common v0.1.0
@@ -77,7 +76,7 @@ require (
 	github.com/siddontang/goredis v0.0.0-20150324035039-760763f78400 // indirect
 	github.com/siddontang/ledisdb v0.0.0-20190202134119-8ceb77e66a92
 	github.com/siddontang/rdb v0.0.0-20150307021120-fc89ed2e418d // indirect
-	github.com/stretchr/testify v1.2.2
+	github.com/stretchr/testify v1.4.0
 	github.com/syndtr/goleveldb v0.0.0-20150819051622-1a9d62f03ea9 // indirect
 	github.com/tatsushid/go-fastping v0.0.0-20150818125950-06cac0fecdc2
 	github.com/twinj/uuid v0.0.0-20151029044442-89173bcdda19
@@ -86,9 +85,9 @@ require (
 	github.com/vmware/govmomi v0.16.1-0.20180228032728-a2138329bbd1
 	github.com/yuin/gopher-lua v0.0.0-20190514113301-1cd887cd7036 // indirect
 	golang.org/x/image v0.0.0-20150916112557-baddd3465a05 // indirect
-	golang.org/x/net v0.0.0-20181217023233-e147a9138326
+	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
 	golang.org/x/oauth2 v0.0.0-20160608215109-65a8d08c6292
-	golang.org/x/sys v0.0.0-20190204203706-41f3e6584952
+	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a
 	google.golang.org/api v0.0.0-20180506000402-20530fd5d65a
 	google.golang.org/appengine v1.0.1-0.20161115221414-ca59ef35f409 // indirect
 	gopkg.in/asn1-ber.v1 v1.0.0-20141119150059-9eae18c3681a // indirect

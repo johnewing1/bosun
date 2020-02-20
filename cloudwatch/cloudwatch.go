@@ -9,7 +9,6 @@ import (
 
 	"bosun.org/slog"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	cw "github.com/aws/aws-sdk-go/service/cloudwatch"
 	cwi "github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
@@ -97,11 +96,18 @@ func (p profileProvider) NewProfile(name, region string) cwi.CloudWatchAPI {
 		Region:                        aws.String(region),
 	}
 
-	if name != "default" {
-		conf.Credentials = credentials.NewSharedCredentials("", name)
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Profile: name,
+		Config:  conf,
+		// Force enable Shared Config support
+		SharedConfigState: session.SharedConfigEnable,
+	})
+
+	if err != nil {
+		slog.Error(err.Error())
 	}
 
-	return cw.New(session.New(&conf))
+	return cw.New(sess)
 }
 
 // getProfile returns a previously created profile or creates a new one for the given profile name and region
