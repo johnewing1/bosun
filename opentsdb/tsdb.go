@@ -2,10 +2,11 @@
 package opentsdb // import "bosun.org/opentsdb"
 
 import (
+	"bosun.org/slog"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
 	"math"
@@ -18,10 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
-
-	"bosun.org/slog"
 )
 
 // ResponseSet is a Multi-Set Response:
@@ -44,10 +41,10 @@ type DPSMap map[string]Point
 // Response is a query response:
 // http://opentsdb.net/docs/build/html/api_http/query/index.html#response.
 type Response struct {
-	Metric        string           `json:"metric"`
-	Tags          TagSet           `json:"tags"`
-	AggregateTags []string         `json:"aggregateTags"`
-	DPS           DPSMap           `json:"dps"`
+	Metric        string   `json:"metric"`
+	Tags          TagSet   `json:"tags"`
+	AggregateTags []string `json:"aggregateTags"`
+	DPS           DPSMap   `json:"dps"`
 
 	// fields added by translating proxy
 	SQL string `json:"sql,omitempty"`
@@ -342,40 +339,21 @@ func Clean(s string) (string, error) {
 // tag values and replaces them.
 // See: http://opentsdb.net/docs/build/html/user_guide/writing.html#metrics-and-tags
 func Replace(s, replacement string) (string, error) {
-	if !needsReplacement(s) {
-		return s, nil
-	}
-	var c string
-	replaced := false
-	for len(s) > 0 {
-		r, size := utf8.DecodeRuneInString(s)
-		if isRuneValid(r) {
-			c += string(r)
-			replaced = false
-		} else if !replaced {
-			//only replace the first occurence of an invalid character.
-			c += replacement
-			replaced = true
-		}
-		s = s[size:]
-	}
-	if len(c) == 0 {
-		return "", fmt.Errorf("clean result is empty")
-	}
-	return c, nil
-}
 
-func needsReplacement(s string) bool {
-	for _, r := range []rune(s) {
-		if !isRuneValid(r) {
-			return true
-		}
+	// constructing a name processor isn't too expensive but we need to refactor this file so that it's possible to
+	// inject instances so that we don't have to keep newing up.
+	// For the moment I prefer to constructing like this to holding onto a global instance
+	val, err := NewOpenTsdbNameProcessor(replacement)
+	if err != nil {
+		return "", errors.Wrap(err, "Failed to create name processor")
 	}
-	return false
-}
 
-func isRuneValid(r rune) bool {
-	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' || r == '.' || r == '/'
+	result, err := val.FormatName(s)
+	if err != nil {
+		return "", errors.Wrap(err, "Failed to format string")
+	}
+
+	return result, nil
 }
 
 // MustReplace is like Replace, but returns an empty string on error.
@@ -700,15 +678,16 @@ func ParsePercentiles(s string) (Percentiles, error) {
 
 // ValidTSDBString returns true if s is a valid metric or tag.
 func ValidTSDBString(s string) bool {
-	if s == "" {
+
+	// constructing a name processor isn't too expensive but we need to refactor this file so that it's possible to
+	// inject instances so that we don't have to keep newing up.
+	// For the moment I prefer to constructing like this to holding onto a global instance
+	val, err := NewOpenTsdbNameProcessor("")
+	if err != nil {
 		return false
 	}
-	for _, c := range s {
-		if !isRuneValid(c) {
-			return false
-		}
-	}
-	return true
+
+	return val.IsValid(s)
 }
 
 var groupRE = regexp.MustCompile("{[^}]+}")
@@ -1183,7 +1162,7 @@ func CreateForwardHeader(r *http.Request) http.Header {
 	if r.RemoteAddr != "" {
 		remoteAddr, _, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
-			slog.Warning("unsupported format for remoteAddr: "+ r.RemoteAddr)
+			slog.Warning("unsupported format for remoteAddr: " + r.RemoteAddr)
 		} else {
 			if header.Get("X-Forwarded-For") != "" {
 				header.Add("X-Forwarded-For", remoteAddr)
