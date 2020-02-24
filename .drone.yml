@@ -17,6 +17,13 @@ pipeline:
     commands:
       - go test -v bosun.org/...
 
+  test-coverage:
+    image: golang:1.13.8-stretch
+    group: test
+    commands:
+      - go test -covermode=count -coverprofile=coverage.out `go list ./... | grep -v integration`
+      - go tool cover -html=coverage.out
+
   build_bosun:
     image: golang:1.13.8-stretch
     environment:
@@ -32,6 +39,33 @@ pipeline:
     commands:
       - cd cmd/scollector
       - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o scollector -tags esv5
+
+  sonarqube:
+    image: 325714046698.dkr.ecr.eu-west-1.amazonaws.com/sonarqube/drone-scanner:2
+    pull: true
+    group: analysis
+    parameters: -Dsonar.projectVersion=1.0.${DRONE_BUILD_NUMBER}
+
+  snyk-analysis:
+    image: 325714046698.dkr.ecr.eu-west-1.amazonaws.com/go-guild/go-snyk-cli:1.2.0
+    pull: true
+    group: analysis
+    secrets: [ SNYK_TOKEN ]
+    commands:
+      - snyk test
+
+  snyk-monitor:
+    image: 325714046698.dkr.ecr.eu-west-1.amazonaws.com/go-guild/go-snyk-cli:1.2.0
+    pull: true
+    group: analysis
+    secrets: [ SNYK_TOKEN ]
+    commands:
+      - snyk monitor
+    when:
+      repo: data-platform/bosun
+      branch: master
+      event:
+        exclude: pull_request
 
   prod_bosun_snapshot:
     image: plugins/s3
