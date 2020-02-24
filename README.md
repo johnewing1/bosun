@@ -3,6 +3,7 @@
 Bosun is a time series alerting framework developed by Stack Exchange. Scollector is a metric collection agent. Learn more at [bosun.org](http://bosun.org).
 
 [![Build Status](https://drone-github.skyscannertools.net/api/badges/data-platform/bosun/status.svg)](https://drone-github.skyscannertools.net/data-platform/bosun)
+[![SonarQube Coverage](https://badges.prod.aws.skyscnr.com/badge?type=sonarqube_coverage&repo=data-platform/bosun)](https://sonarqube.skyscannertools.net/dashboard?id=data-platform%3Abosun)
 
 ## building
 
