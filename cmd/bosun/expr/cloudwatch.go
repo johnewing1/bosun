@@ -27,58 +27,56 @@ var CloudWatch = map[string]parse.Func{
 
 func parseCloudWatchResponse(req *cloudwatch.Request, s *cloudwatch.Response) ([]*Result, error) {
 	const parseErrFmt = "cloudwatch ParseError (%s): %s"
+	var dps Series
 	if s == nil {
 		return nil, fmt.Errorf(parseErrFmt, req.Metric, "empty response")
 	}
 	results := make([]*Result, 0)
-	dps := make(Series)
-	tags := make(opentsdb.TagSet)
-	for _, d := range req.Dimensions {
-		tags[d.Name] = d.Value
+
+	for _, result := range s.Raw.MetricDataResults {
+		if len(result.Timestamps) == 0 {
+			continue
+		}
+
+		dps = make(Series)
+
+		for x, t := range result.Timestamps {
+			dps[*t] = *result.Values[x]
+
+		}
+		r := Result{
+			Value: dps,
+			Group: s.TagSet[*result.Id],
+		}
+		results = append(results, &r)
 	}
 
-	switch req.Statistic {
-	case "Sum":
-		for _, x := range s.Raw.Datapoints {
-			dps[*x.Timestamp] = *x.Sum
-		}
-	case "Average":
-		for _, x := range s.Raw.Datapoints {
-			dps[*x.Timestamp] = *x.Average
-		}
-	case "Minimum":
-		for _, x := range s.Raw.Datapoints {
-			dps[*x.Timestamp] = *x.Minimum
-		}
-	case "Maximum":
-		for _, x := range s.Raw.Datapoints {
-			dps[*x.Timestamp] = *x.Maximum
-		}
-	default:
-		return nil, fmt.Errorf("No such statistic '%s'", req.Statistic)
-	}
-
-	results = append(results, &Result{
-		Value: dps,
-		Group: tags,
-	})
 	return results, nil
 }
 
-func parseDimensions(dimensions string) []cloudwatch.Dimension {
-	parsed := make([]cloudwatch.Dimension, 0)
+func hasWildcardDimension(dimensions string) bool {
+	return strings.Contains(dimensions, "*")
+}
+
+func parseDimensions(dimensions string) [][]cloudwatch.Dimension {
+	dl := make([][]cloudwatch.Dimension, 0)
 	if len(strings.TrimSpace(dimensions)) == 0 {
-		return parsed
+		return dl
 	}
 	dims := strings.Split(dimensions, ",")
+
+	l := make([]cloudwatch.Dimension, 0)
 	for _, row := range dims {
 		dim := strings.Split(row, ":")
-		parsed = append(parsed, cloudwatch.Dimension{Name: dim[0], Value: dim[1]})
+		l = append(l, cloudwatch.Dimension{Name: dim[0], Value: dim[1]})
 	}
-	return parsed
+	dl = append(dl, l)
+
+	return dl
 }
 
 func CloudWatchQuery(prefix string, e *State, region, namespace, metric, period, statistic, dimensions, sduration, eduration string) (*Results, error) {
+	var d [][]cloudwatch.Dimension
 	sd, err := opentsdb.ParseDuration(sduration)
 	if err != nil {
 		return nil, err
@@ -90,9 +88,27 @@ func CloudWatchQuery(prefix string, e *State, region, namespace, metric, period,
 			return nil, err
 		}
 	}
-	d := parseDimensions(dimensions)
+	d = parseDimensions(dimensions)
+	if hasWildcardDimension(dimensions) {
+		lr := cloudwatch.LookupRequest{
+			Region:     region,
+			Namespace:  namespace,
+			Metric:     metric,
+			Dimensions: d,
+			Profile:    prefix,
+		}
+		d, err = e.CloudWatchContext.LookupDimensions(&lr)
+		if err != nil {
+			return nil, err
+		}
+		if len(d) == 0 {
+			return nil, fmt.Errorf("Wildcard dimension did not match any cloudwatch metrics")
+		}
+	}
+
 	st := e.now.Add(-time.Duration(sd))
 	et := e.now.Add(-time.Duration(ed))
+
 	req := &cloudwatch.Request{
 		Start:      &st,
 		End:        &et,

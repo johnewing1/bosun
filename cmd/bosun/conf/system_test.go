@@ -64,7 +64,9 @@ func TestSystemToml(t *testing.T) {
 		UnsafeSSL: true,
 	})
 	assert.Equal(t, sc.CloudWatchConf, CloudWatchConf{
-		Enabled: true,
+		Enabled:        true,
+		PagesLimit:     10,
+		ExpansionLimit: 500,
 	}, "CloudwatchConf does not match")
 
 }

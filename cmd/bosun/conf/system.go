@@ -295,7 +295,21 @@ type LDAPGroup struct {
 }
 
 type CloudWatchConf struct {
-	Enabled bool
+	Enabled        bool
+	ExpansionLimit int
+	PagesLimit     int
+}
+
+func (c CloudWatchConf) Valid() error {
+	// Check Cloudwatch Configuration
+	if c.PagesLimit < 1 {
+		return fmt.Errorf(`error in cloudwatch configuration. PagesLimit must be greater than 0`)
+	}
+
+	if c.ExpansionLimit < 1 {
+		return fmt.Errorf(`error in cloudwatch configuration. ExpansionLimit must be greater than 0`)
+	}
+	return nil
 }
 
 // GetSystemConfProvider returns the SystemConfProvider interface

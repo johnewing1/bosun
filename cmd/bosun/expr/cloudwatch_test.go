@@ -1,7 +1,6 @@
 package expr
 
 import (
-	"strconv"
 	"testing"
 	"time"
 
@@ -23,43 +22,84 @@ func (m *mockProfileProvider) NewProfile(name, region string) cloudwatchiface.Cl
 	return &mockCloudWatchClient{}
 }
 
-func (m *mockCloudWatchClient) GetMetricStatistics(input *cw.GetMetricStatisticsInput) (output *cw.GetMetricStatisticsOutput, err error) {
-	output = new(cw.GetMetricStatisticsOutput)
-	datapoints := make([]*cw.Datapoint, 0)
-	for i := 10; i >= 0; i-- {
-		t := time.Now()
-		dur, _ := time.ParseDuration(strconv.Itoa(i*60) + "s")
-		t = t.Add(-dur)
-		datapoint, _ := buildDatapoint(&t)
-		datapoints = append(datapoints, datapoint)
+const metric = "CPUUtilzation"
+const namespace = "AWS/EC2"
+
+func (c mockCloudWatchClient) ListMetricsPages(li *cw.ListMetricsInput, callback func(*cw.ListMetricsOutput, bool) bool) error {
+	var metrics []*cw.Metric
+	var n = metric
+	var ns = namespace
+
+	var instances []string
+	if li.Dimensions == nil || (li.Dimensions != nil && *li.Dimensions[0].Value == "0106b4d25c54baac7") {
+		instances = append(instances, "0106b4d25c54baac7")
 	}
 
-	output.Label = input.MetricName
-	output.Datapoints = datapoints
-	return output, nil
+	if li.Dimensions == nil {
+		instances = append(instances, "5306b4d25c546577l")
+		instances = append(instances, "910asdasd25c5477l")
+	}
+
+	for _, inst := range instances {
+		dn := "InstanceId"
+		dv := inst
+		dim := cw.Dimension{
+			Name:  &dn,
+			Value: &dv,
+		}
+		dimensions := []*cw.Dimension{&dim}
+		metric := cw.Metric{
+			Dimensions: dimensions,
+			MetricName: &n,
+			Namespace:  &ns,
+		}
+		metrics = append(metrics, &metric)
+	}
+
+	lmo := &cw.ListMetricsOutput{
+		Metrics:   metrics,
+		NextToken: nil,
+	}
+
+	callback(lmo, false)
+	return nil
 }
 
-func buildDatapoint(t *time.Time) (point *cw.Datapoint, err error) {
-	var sum, average, maximum, minimum, sampleCount float64
-	average = 1
-	sum = 1
-	maximum = 1
-	minimum = 1
-	sampleCount = 1
+func (m *mockCloudWatchClient) GetMetricData(cwi *cw.GetMetricDataInput) (*cw.GetMetricDataOutput, error) {
+	var mdr []*cw.MetricDataResult
+	var r cw.MetricDataResult
+	var timestamps []*time.Time
+	var values []*float64
 
-	timestamp := t
-	d := new(cw.Datapoint)
-	d.Average = &average
-	d.Maximum = &maximum
-	d.Minimum = &minimum
-	d.SampleCount = &sampleCount
-	d.Sum = &sum
-	d.Timestamp = timestamp
-	return d, nil
+	for _, mdq := range cwi.MetricDataQueries {
+		for j := 0; j < 600; j = j + int(*mdq.MetricStat.Period) {
+			time := cwi.StartTime.Add(time.Second * time.Duration(j))
+			timestamps = append(timestamps, &time)
+			val := float64(j)
+			values = append(values, &val)
+		}
+		r = cw.MetricDataResult{
+			Id:         mdq.Id,
+			Label:      nil,
+			Messages:   nil,
+			StatusCode: nil,
+			Timestamps: timestamps,
+			Values:     values,
+		}
+		mdr = append(mdr, &r)
+	}
+
+	o := cw.GetMetricDataOutput{
+		Messages:          nil,
+		MetricDataResults: mdr,
+		NextToken:         nil,
+	}
+	return &o, nil
 }
 
 func TestCloudWatchQuery(t *testing.T) {
 	c := cloudwatch.GetContextWithProvider(&mockProfileProvider{})
+
 	e := State{
 		now: time.Date(2018, time.January, 1, 0, 0, 0, 0, time.UTC),
 		Backends: &Backends{
@@ -82,11 +122,13 @@ func TestCloudWatchQuery(t *testing.T) {
 		dimensions string
 		start      string
 		end        string
+		expected   string
 	}{
-		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Sum", "InstanceId:i-0106b4d25c54baac7", "2h", "1h"},
-		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Average", "InstanceId:i-0106b4d25c54baac7", "2h", "1h"},
-		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Maximum", "InstanceId:i-0106b4d25c54baac7", "2h", "1h"},
-		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Minimum", "InstanceId:i-0106b4d25c54baac7", "2h", "1h"},
+		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Sum", "InstanceId:i-0106b4d25c54baac7", "2h", "1h", "{InstanceId=i-0106b4d25c54baac7}"},
+		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Average", "InstanceId:i-0106b4d25c54baac7", "2h", "1h", "{InstanceId=i-0106b4d25c54baac7}"},
+		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Maximum", "InstanceId:i-0106b4d25c54baac7", "2h", "1h", "{InstanceId=i-0106b4d25c54baac7}"},
+		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Minimum", "InstanceId:i-0106b4d25c54baac7", "2h", "1h", "{InstanceId=i-0106b4d25c54baac7}"},
+		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Minimum", "InstanceId:*", "2h", "1h", "{InstanceId=910asdasd25c5477l}"},
 	}
 	for _, u := range tests {
 
@@ -95,8 +137,8 @@ func TestCloudWatchQuery(t *testing.T) {
 			u.dimensions, u.start, u.end)
 		if err != nil {
 			t.Errorf("Query Failure: %s ", err)
-		} else if results.Results[0].Group.String() != "{InstanceId=i-0106b4d25c54baac7}" {
-			t.Errorf("Group mismatch")
+		} else if results.Results[0].Group.String() != u.expected {
+			t.Errorf("Group mismatch got %s , expected %s", results.Results[0].Group.String(), u.expected)
 		}
 	}
 }
@@ -144,163 +186,6 @@ func TestCloudWatchTagQuery(t *testing.T) {
 		}
 		if !tags.Equal(u.tags) {
 			t.Errorf("Missmatching tags, expected '%s' , got '%s' ", u.tags, tags)
-		}
-	}
-}
-func TestCacheKeyMatch(t *testing.T) {
-	start := time.Date(2018, 7, 4, 17, 0, 0, 0, time.UTC)
-	end := time.Date(2018, 7, 4, 18, 0, 0, 0, time.UTC)
-	var tests = []struct {
-		req cloudwatch.Request
-		key string
-	}{
-		{req: cloudwatch.Request{
-			Start:     &start,
-			End:       &end,
-			Region:    "eu-west-1",
-			Namespace: "AWS/EC2",
-			Metric:    "CPUUtilization",
-			Period:    "60", Statistic: "Sum",
-			Dimensions: []cloudwatch.Dimension{{Name: "InstanceId", Value: "i-0106b4d25c54baac7"}},
-			Profile:    "prod",
-		},
-			key: "cloudwatch-1530723600-1530727200-eu-west-1-AWS/EC2-CPUUtilization-60-Sum-[InstanceId:i-0106b4d25c54baac7]-prod"},
-	}
-
-	for _, u := range tests {
-		calculatedKey := u.req.CacheKey()
-		if u.key != calculatedKey {
-			t.Errorf("Cache key doesn't match, expected '%s' got '%s' ", u.key, calculatedKey)
-		}
-	}
-
-}
-
-func TestCacheKeyMisMatch(t *testing.T) {
-
-	start := time.Date(2018, 7, 4, 17, 0, 0, 0, time.UTC)
-	end := time.Date(2018, 7, 4, 18, 0, 0, 0, time.UTC)
-	exampleRequest := cloudwatch.Request{
-		Start:      &start,
-		End:        &end,
-		Region:     "eu-west-1",
-		Namespace:  "AWS/EC2",
-		Metric:     "CPUUtilization",
-		Period:     "60",
-		Statistic:  "Sum",
-		Dimensions: []cloudwatch.Dimension{{Name: "InstanceId", Value: "i-0106b4d25c54baac7"}},
-		Profile:    "prod",
-	}
-
-	exampleKey := exampleRequest.CacheKey()
-
-	variantStart := time.Date(2018, 7, 4, 17, 30, 0, 0, time.UTC)
-	variantEnd := time.Date(2018, 7, 4, 18, 30, 0, 0, time.UTC)
-	var tests = []cloudwatch.Request{
-		{
-			Start:      &variantStart,
-			End:        &end,
-			Region:     "eu-west-1",
-			Namespace:  "AWS/EC2",
-			Metric:     "CPUUtilization",
-			Period:     "60",
-			Statistic:  "Sum",
-			Dimensions: []cloudwatch.Dimension{{Name: "InstanceId", Value: "i-0106b4d25c54baac7"}},
-			Profile:    "prod",
-		},
-		{
-			Start:      &start,
-			End:        &variantEnd,
-			Region:     "eu-west-1",
-			Namespace:  "AWS/EC2",
-			Metric:     "CPUUtilization",
-			Period:     "60",
-			Statistic:  "Sum",
-			Dimensions: []cloudwatch.Dimension{{Name: "InstanceId", Value: "i-0106b4d25c54baac7"}},
-			Profile:    "prod",
-		},
-		{
-			Start:      &start,
-			End:        &end,
-			Region:     "eu-central-1",
-			Namespace:  "AWS/EC2",
-			Metric:     "CPUUtilization",
-			Period:     "60",
-			Statistic:  "Sum",
-			Dimensions: []cloudwatch.Dimension{{Name: "InstanceId", Value: "i-0106b4d25c54baac7"}},
-			Profile:    "prod",
-		},
-		{
-			Start:      &start,
-			End:        &end,
-			Region:     "eu-west-1",
-			Namespace:  "AWS/ECS",
-			Metric:     "CPUUtilization",
-			Period:     "60",
-			Statistic:  "Sum",
-			Dimensions: []cloudwatch.Dimension{{Name: "InstanceId", Value: "i-0106b4d25c54baac7"}},
-			Profile:    "prod",
-		},
-		{
-			Start:      &start,
-			End:        &end,
-			Region:     "eu-west-1",
-			Namespace:  "AWS/EC2",
-			Metric:     "MemoryUsage",
-			Period:     "60",
-			Statistic:  "Sum",
-			Dimensions: []cloudwatch.Dimension{{Name: "InstanceId", Value: "i-0106b4d25c54baac7"}},
-			Profile:    "prod",
-		},
-		{
-			Start:      &start,
-			End:        &end,
-			Region:     "eu-west-1",
-			Namespace:  "AWS/EC2",
-			Metric:     "CPUUtilization",
-			Period:     "300",
-			Statistic:  "Sum",
-			Dimensions: []cloudwatch.Dimension{{Name: "InstanceId", Value: "i-0106b4d25c54baac7"}},
-			Profile:    "prod",
-		},
-		{
-			Start:      &start,
-			End:        &end,
-			Region:     "eu-west-1",
-			Namespace:  "AWS/EC2",
-			Metric:     "CPUUtilization",
-			Period:     "60",
-			Statistic:  "Avg",
-			Dimensions: []cloudwatch.Dimension{{Name: "InstanceId", Value: "i-0106b4d25c54baac7"}},
-			Profile:    "prod",
-		},
-		{
-			Start:      &start,
-			End:        &end,
-			Region:     "eu-west-1",
-			Namespace:  "AWS/EC2",
-			Metric:     "CPUUtilization",
-			Period:     "300",
-			Statistic:  "Sum",
-			Dimensions: []cloudwatch.Dimension{{Name: "InstanceId", Value: "i-01064646d6d6baac7"}},
-			Profile:    "prod",
-		},
-		{
-			Start:      &start,
-			End:        &end,
-			Region:     "eu-west-1",
-			Namespace:  "AWS/EC2",
-			Metric:     "CPUUtilization",
-			Period:     "60",
-			Statistic:  "Sum",
-			Dimensions: []cloudwatch.Dimension{{Name: "InstanceId", Value: "i-0106b4d25c54baac7"}},
-			Profile:    "sandbox",
-		},
-	}
-	for _, u := range tests {
-		calculatedKey := u.CacheKey()
-		if exampleKey == calculatedKey {
-			t.Errorf("Calculated key shouldn't match example but does. '%s' == '%s' ", calculatedKey, exampleKey)
 		}
 	}
 }

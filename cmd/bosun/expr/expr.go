@@ -67,7 +67,7 @@ type Backends struct {
 	ElasticConfig     ElasticConfig
 	AzureMonitor      AzureMonitorClients
 	CloudWatchContext cloudwatch.Context
-	PromConfig      PromClients
+	PromConfig        PromClients
 }
 
 type BosunProviders struct {
@@ -123,7 +123,7 @@ func (e *Expr) Execute(backends *Backends, providers *BosunProviders, T miniprof
 		Origin:         origin,
 		Backends:       backends,
 		BosunProviders: providers,
-		httpHeader:    httpHeader,
+		httpHeader:     httpHeader,
 		Timer:          T,
 	}
 	return e.ExecuteState(s)
