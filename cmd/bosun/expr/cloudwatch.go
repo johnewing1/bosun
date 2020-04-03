@@ -37,7 +37,10 @@ func parseCloudWatchResponse(req *cloudwatch.Request, s *cloudwatch.Response) ([
 		if len(result.Timestamps) == 0 {
 			continue
 		}
-
+		tags := make(opentsdb.TagSet)
+		for k,v := range s.TagSet[*result.Id] {
+			tags[k] = v
+		}
 		dps = make(Series)
 
 		for x, t := range result.Timestamps {
@@ -46,7 +49,7 @@ func parseCloudWatchResponse(req *cloudwatch.Request, s *cloudwatch.Response) ([
 		}
 		r := Result{
 			Value: dps,
-			Group: s.TagSet[*result.Id],
+			Group: tags,
 		}
 		results = append(results, &r)
 	}
