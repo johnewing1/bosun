@@ -124,8 +124,8 @@ func TestCloudWatchQuery(t *testing.T) {
 		end        string
 		expected   string
 	}{
-		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Sum", "InstanceId:i-0106b4d25c54baac7", "2h", "1h", "{InstanceId=i-0106b4d25c54baac7}"},
-		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Average", "InstanceId:i-0106b4d25c54baac7", "2h", "1h", "{InstanceId=i-0106b4d25c54baac7}"},
+		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60s", "Sum", "InstanceId:i-0106b4d25c54baac7", "2h", "1h", "{InstanceId=i-0106b4d25c54baac7}"},
+		{"eu-west-1", "AWS/EC2", "CPUUtilization", "1m", "Average", "InstanceId:i-0106b4d25c54baac7", "2h", "1h", "{InstanceId=i-0106b4d25c54baac7}"},
 		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Maximum", "InstanceId:i-0106b4d25c54baac7", "2h", "1h", "{InstanceId=i-0106b4d25c54baac7}"},
 		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Minimum", "InstanceId:i-0106b4d25c54baac7", "2h", "1h", "{InstanceId=i-0106b4d25c54baac7}"},
 		{"eu-west-1", "AWS/EC2", "CPUUtilization", "60", "Minimum", "InstanceId:*", "2h", "1h", "{InstanceId=910asdasd25c5477l}"},
@@ -135,6 +135,7 @@ func TestCloudWatchQuery(t *testing.T) {
 		results, err := CloudWatchQuery("default", &e, u.region,
 			u.namespace, u.metric, u.period, u.statistics,
 			u.dimensions, u.start, u.end)
+
 		if err != nil {
 			t.Errorf("Query Failure: %s ", err)
 		} else if results.Results[0].Group.String() != u.expected {
@@ -142,6 +143,45 @@ func TestCloudWatchQuery(t *testing.T) {
 		}
 	}
 }
+
+func TestDateParseFail(t *testing.T) {
+	c := cloudwatch.GetContextWithProvider(&mockProfileProvider{})
+
+	e := State{
+		now: time.Date(2018, time.January, 1, 0, 0, 0, 0, time.UTC),
+		Backends: &Backends{
+			CloudWatchContext: c,
+		},
+		BosunProviders: &BosunProviders{
+			Squelched: func(tags opentsdb.TagSet) bool {
+				return false
+			},
+		},
+		Timer: new(miniprofiler.Profile),
+	}
+
+	var tests = []struct {
+		period string
+		start  string
+		end    string
+		err    error
+	}{
+		{"60s", "2h", "1h", nil},
+		{"60x", "2h", "1h", PeriodParseError},
+		{"60s", "2x", "1h", StartParseError},
+		{"60s", "2h", "1x", EndParseError},
+	}
+	for _, u := range tests {
+
+		_, err := CloudWatchQuery("default", &e, "eu-west-1", "AWS/EC2", "CPUUtilization", u.period,
+			"Sum", "InstanceId:i-0106b4d25c54baac7", u.start, u.end)
+
+		if err != u.err {
+			t.Errorf("Query Failure:  expected error to be %v, got %v", u.err, err)
+		}
+	}
+}
+
 func TestCloudWatchQueryWithoutDimensions(t *testing.T) {
 	c := cloudwatch.GetContextWithProvider(&mockProfileProvider{})
 	e := State{

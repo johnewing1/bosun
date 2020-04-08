@@ -11,7 +11,6 @@ import (
 	cw "github.com/aws/aws-sdk-go/service/cloudwatch"
 	cwi "github.com/aws/aws-sdk-go/service/cloudwatch/cloudwatchiface"
 	"github.com/ryanuber/go-glob"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +26,7 @@ const DefaultExpansionLimit = 500
 
 var ErrExpansionLimit = errors.New("Hit dimension expansion limit")
 var ErrPagingLimit = errors.New("Hit the page limit when retrieving metrics")
+var ErrInvalidPeriod = errors.New("Period must be greater than 0")
 
 // Request holds query objects. Currently only absolute times are supported.
 type Request struct {
@@ -35,7 +35,7 @@ type Request struct {
 	Region     string
 	Namespace  string
 	Metric     string
-	Period     string
+	Period     int64
 	Statistic  string
 	Dimensions [][]Dimension
 	Profile    string
@@ -82,7 +82,7 @@ type DimensionList struct {
 }
 
 func (r *Request) CacheKey() string {
-	return fmt.Sprintf("cloudwatch-%d-%d-%s-%s-%s-%s-%s-%s-%s",
+	return fmt.Sprintf("cloudwatch-%d-%d-%s-%s-%s-%d-%s-%s-%s",
 		r.Start.Unix(),
 		r.End.Unix(),
 		r.Region,
@@ -197,7 +197,7 @@ func GetContextWithProvider(p ProfileProvider) Context {
 }
 
 func buildQuery(r *Request, id string, dimensions []Dimension) cw.MetricDataQuery {
-	awsPeriod, _ := strconv.ParseInt(r.Period, 10, 64)
+	awsPeriod := r.Period
 	d := make([]*cw.Dimension, 0)
 
 	for _, i := range dimensions {
@@ -249,7 +249,9 @@ func (c cloudWatchContext) Query(r *Request) (Response, error) {
 	var id string
 
 	api := c.getProfile(r.Profile, r.Region)
-
+	if r.Period <= 0 {
+		return response, ErrInvalidPeriod
+	}
 	// custom metrics can have no dimensions
 	if len(r.Dimensions) == 0 {
 		id = fmt.Sprintf("q0")

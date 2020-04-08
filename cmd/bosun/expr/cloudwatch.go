@@ -1,15 +1,16 @@
 package expr
 
 import (
-	"encoding/json"
-	"fmt"
-	"strings"
-	"time"
-
 	"bosun.org/cloudwatch"
 	"bosun.org/cmd/bosun/expr/parse"
 	"bosun.org/models"
 	"bosun.org/opentsdb"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"regexp"
+	"strings"
+	"time"
 )
 
 // cloudwatch defines functions for use with amazon cloudwatch api
@@ -24,6 +25,12 @@ var CloudWatch = map[string]parse.Func{
 		PrefixEnabled: true,
 	},
 }
+
+var PeriodParseError = errors.New("Could not parse the period value")
+var StartParseError = errors.New("Could not parse the start value")
+var EndParseError = errors.New("Could not parse the end value")
+
+var isNumber = regexp.MustCompile("^\\d+$")
 
 func parseCloudWatchResponse(req *cloudwatch.Request, s *cloudwatch.Response) ([]*Result, error) {
 	const parseErrFmt = "cloudwatch ParseError (%s): %s"
@@ -82,15 +89,25 @@ func CloudWatchQuery(prefix string, e *State, region, namespace, metric, period,
 	var d [][]cloudwatch.Dimension
 	sd, err := opentsdb.ParseDuration(sduration)
 	if err != nil {
-		return nil, err
+		return nil, StartParseError
 	}
 	ed := opentsdb.Duration(0)
 	if eduration != "" {
 		ed, err = opentsdb.ParseDuration(eduration)
 		if err != nil {
-			return nil, err
+			return nil, EndParseError
 		}
 	}
+
+	// to maintain backwards compatiblity assume that period without time unit is seconds
+	if isNumber.MatchString(period) {
+		period += "s"
+	}
+	dur, err := opentsdb.ParseDuration(period)
+	if err != nil {
+		return nil, PeriodParseError
+	}
+
 	d = parseDimensions(dimensions)
 	if hasWildcardDimension(dimensions) {
 		lr := cloudwatch.LookupRequest{
@@ -118,7 +135,7 @@ func CloudWatchQuery(prefix string, e *State, region, namespace, metric, period,
 		Region:     region,
 		Namespace:  namespace,
 		Metric:     metric,
-		Period:     period,
+		Period:     int64(dur.Seconds()),
 		Statistic:  statistic,
 		Dimensions: d,
 		Profile:    prefix,
