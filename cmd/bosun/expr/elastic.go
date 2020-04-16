@@ -63,6 +63,11 @@ var Elastic = map[string]parse.Func{
 		Return: models.TypeESIndexer,
 		F:      ESLS,
 	},
+	"esccs": {
+		Args:   []models.FuncType{models.TypeString, models.TypeString},
+		Return: models.TypeESIndexer,
+		F:      ESCCS,
+	},
 
 	// Funcs for generate elastic queries (ESQuery Type) to further filter results
 	"esall": {
