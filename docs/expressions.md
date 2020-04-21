@@ -370,6 +370,13 @@ esindices takes one or more literal indices for the enclosing query to use. It d
 
 esls is a shortcut for esdaily("@timestamp", indexRoot+"-", "2006.01.02") and is for the default daily format that logstash creates.
 
+### esccs(timeField string, indexRoot string) ESIndexer
+{: .exprFunc}
+
+esccs constructs a cross-cluster-search index term which can be used to search across all clusters (registered with the configured Elasticsearch host) for all indices in the series named indexRoot.
+
+The timeField is the name of the field in the index series that contains document timestamps.
+
 ## Elastic Query Generating Functions (for filtering)
 
 ### esall() ESQuery
