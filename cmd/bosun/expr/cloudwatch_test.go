@@ -182,6 +182,42 @@ func TestDateParseFail(t *testing.T) {
 	}
 }
 
+func TestMultiRegion(t *testing.T) {
+	c := cloudwatch.GetContextWithProvider(&mockProfileProvider{})
+
+	e := State{
+		now: time.Date(2018, time.January, 1, 0, 0, 0, 0, time.UTC),
+		Backends: &Backends{
+			CloudWatchContext: c,
+		},
+		BosunProviders: &BosunProviders{
+			Squelched: func(tags opentsdb.TagSet) bool {
+				return false
+			},
+		},
+		Timer: new(miniprofiler.Profile),
+	}
+
+	var tests = []struct {
+		dimension string
+		expected  int
+	}{
+		{"eu-west-1", 1},
+		{"eu-central-1,eu-west-1", 2},
+		{"eu-west-1,eu-west-2,eu-central-1,ap-southeast-1", 4},
+	}
+	for _, u := range tests {
+
+		res, err := CloudWatchQuery("default", &e, u.dimension, "AWS/EC2", "CPUUtilization", "1m",
+			"Sum", "InstanceId:i-0106b4d25c54baac7", "1h", "")
+		if err != nil {
+			t.Errorf("Query Failure: %v", err)
+		} else if len(res.Results) != u.expected {
+			t.Errorf("Unexpected result set size, wanted %d, got %d results", u.expected, len(res.Results))
+		}
+	}
+}
+
 func TestCloudWatchQueryWithoutDimensions(t *testing.T) {
 	c := cloudwatch.GetContextWithProvider(&mockProfileProvider{})
 	e := State{

@@ -67,6 +67,7 @@ func TestSystemToml(t *testing.T) {
 		Enabled:        true,
 		PagesLimit:     10,
 		ExpansionLimit: 500,
+		Concurrency:    2,
 	}, "CloudwatchConf does not match")
 
 }

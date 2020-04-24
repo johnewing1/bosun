@@ -128,6 +128,7 @@ ExampleExpression = 'avg(q("avg:rate:os.cpu{host=*bosun*}", "5m", "")) > 80'
 	Enabled = true
 	PagesLimit = 10
 	ExpansionLimit = 500
+	Concurrency = 2
 
 [PromConf]
 	[PromConf.default]

@@ -5,11 +5,11 @@ import (
 	"bosun.org/cmd/bosun/expr/parse"
 	"bosun.org/models"
 	"bosun.org/opentsdb"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -32,7 +32,7 @@ var EndParseError = errors.New("Could not parse the end value")
 
 var isNumber = regexp.MustCompile("^\\d+$")
 
-func parseCloudWatchResponse(req *cloudwatch.Request, s *cloudwatch.Response) ([]*Result, error) {
+func parseCloudWatchResponse(req *cloudwatch.Request, s *cloudwatch.Response, multiRegion bool) ([]*Result, error) {
 	const parseErrFmt = "cloudwatch ParseError (%s): %s"
 	var dps Series
 	if s == nil {
@@ -45,19 +45,23 @@ func parseCloudWatchResponse(req *cloudwatch.Request, s *cloudwatch.Response) ([
 			continue
 		}
 		tags := make(opentsdb.TagSet)
-		for k,v := range s.TagSet[*result.Id] {
+		for k, v := range s.TagSet[*result.Id] {
 			tags[k] = v
 		}
 		dps = make(Series)
-
 		for x, t := range result.Timestamps {
 			dps[*t] = *result.Values[x]
-
 		}
+
 		r := Result{
 			Value: dps,
 			Group: tags,
 		}
+
+		if multiRegion {
+			r.Group["bosun-region"] = req.Region
+		}
+
 		results = append(results, &r)
 	}
 
@@ -85,90 +89,169 @@ func parseDimensions(dimensions string) [][]cloudwatch.Dimension {
 	return dl
 }
 
-func CloudWatchQuery(prefix string, e *State, region, namespace, metric, period, statistic, dimensions, sduration, eduration string) (*Results, error) {
-	var d [][]cloudwatch.Dimension
-	sd, err := opentsdb.ParseDuration(sduration)
+func parseDurations(s, e, p string) (start, end, period opentsdb.Duration, err error) {
+
+	start, err = opentsdb.ParseDuration(s)
 	if err != nil {
-		return nil, StartParseError
+		return start, end, period, StartParseError
 	}
-	ed := opentsdb.Duration(0)
-	if eduration != "" {
-		ed, err = opentsdb.ParseDuration(eduration)
+	end = opentsdb.Duration(0)
+	if e != "" {
+		end, err = opentsdb.ParseDuration(e)
 		if err != nil {
-			return nil, EndParseError
+			return start, end, period, EndParseError
 		}
 	}
 
-	// to maintain backwards compatiblity assume that period without time unit is seconds
-	if isNumber.MatchString(period) {
-		period += "s"
+	// to maintain backwards compatibility assume that period without time unit is seconds
+	if isNumber.MatchString(p) {
+		p += "s"
 	}
-	dur, err := opentsdb.ParseDuration(period)
+	period, err = opentsdb.ParseDuration(p)
 	if err != nil {
-		return nil, PeriodParseError
+		return start, end, period, PeriodParseError
 	}
-
-	d = parseDimensions(dimensions)
-	if hasWildcardDimension(dimensions) {
-		lr := cloudwatch.LookupRequest{
-			Region:     region,
-			Namespace:  namespace,
-			Metric:     metric,
-			Dimensions: d,
-			Profile:    prefix,
-		}
-		d, err = e.CloudWatchContext.LookupDimensions(&lr)
-		if err != nil {
-			return nil, err
-		}
-		if len(d) == 0 {
-			return nil, fmt.Errorf("Wildcard dimension did not match any cloudwatch metrics")
-		}
-	}
-
-	st := e.now.Add(-time.Duration(sd))
-	et := e.now.Add(-time.Duration(ed))
-
-	req := &cloudwatch.Request{
-		Start:      &st,
-		End:        &et,
-		Region:     region,
-		Namespace:  namespace,
-		Metric:     metric,
-		Period:     int64(dur.Seconds()),
-		Statistic:  statistic,
-		Dimensions: d,
-		Profile:    prefix,
-	}
-	s, err := timeCloudwatchRequest(e, req)
-	if err != nil {
-		return nil, err
-	}
-	r := new(Results)
-	results, err := parseCloudWatchResponse(req, &s)
-	if err != nil {
-		return nil, err
-	}
-	r.Results = results
-	return r, nil
+	return
 }
 
-func timeCloudwatchRequest(e *State, req *cloudwatch.Request) (resp cloudwatch.Response, err error) {
-	e.cloudwatchQueries = append(e.cloudwatchQueries, *req)
-	b, _ := json.MarshalIndent(req, "", "  ")
-	e.Timer.StepCustomTiming("cloudwatch", "query", string(b), func() {
-		key := req.CacheKey()
+func CloudWatchQuery(prefix string, e *State, region, namespace, metric, period, statistic, dimensions, sduration, eduration string) (*Results, error) {
 
-		getFn := func() (interface{}, error) {
-			return e.CloudWatchContext.Query(req)
+	r := new(Results)
+
+	regions := strings.Split(region, ",")
+	if len(regions) == 0 {
+		return r, nil
+	}
+
+	var wg sync.WaitGroup
+	queryResults := []*Results{}
+
+	// reqCh (Request Channel) is populated with cloudwatch requests for each region
+	reqCh := make(chan cloudwatch.Request, len(regions))
+	// resCh (Result Channel) contains the timeseries responses for requests for region
+	resCh := make(chan *Results, len(regions))
+	// errCh (Error Channel) contains any request errors
+	errCh := make(chan error, len(regions))
+
+	// a worker makes a getMetricData request for a region
+	worker := func() {
+		for req := range reqCh {
+			res := []*Result{}
+			data, err := getCloudwatchData(e, &req)
+			if err == nil {
+				res, err = parseCloudWatchResponse(&req, &data, len(regions) > 1)
+				resCh <- &Results{Results: res,}
+			}
+			errCh <- err
 		}
-		var val interface{}
-		var hit bool
-		val, err, hit = e.Cache.Get(key, getFn)
-		collectCacheHit(e.Cache, "cloudwatch", hit)
-		resp = val.(cloudwatch.Response)
+		defer wg.Done()
+	}
 
+	// Create N workers to parallelize multiple requests at once since each region requires an HTTP request
+	for i := 0; i < e.CloudWatchContext.GetConcurrency(); i++ {
+		wg.Add(1)
+		go worker()
+	}
+
+	sd, ed, p, err := parseDurations(sduration, eduration, period)
+	if err != nil {
+		return r, err
+	}
+
+	timingString := fmt.Sprintf(`querying %d regions for metric:"%v"`, len(regions), metric)
+	e.Timer.StepCustomTiming("cloudwatch", "query", timingString, func() {
+		// Feed region queries into the request channel which the workers will consume
+
+		for _, r := range regions {
+
+			// The times are rounded to a whole period. This improves
+			// both the caching of the query results as well as the query performance for
+			// the reasons outlined in the aws sdk docs here
+			// https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_GetMetricData.html
+
+			// round down start time
+			st := e.now.Add(-time.Duration(sd)).Truncate(time.Duration(p))
+			// round up end time
+			et := e.now.Add(-time.Duration(ed)).Truncate(time.Duration(p)).Add(time.Duration(p))
+
+			req := cloudwatch.Request{
+				Start:           &st,
+				End:             &et,
+				Region:          r,
+				Namespace:       namespace,
+				Metric:          metric,
+				Period:          int64(p.Seconds()),
+				Statistic:       statistic,
+				DimensionString: dimensions,
+				Profile:         prefix,
+			}
+			reqCh <- req
+		}
+		close(reqCh)
+		wg.Wait() // Wait for all the workers to finish
 	})
+	close(resCh)
+	close(errCh)
+
+	// Gather errors from the request and return an error if any of the requests failled
+	errs := []string{}
+	for err := range errCh {
+		if err == nil {
+			continue
+		}
+		errs = append(errs, err.Error())
+	}
+	if len(errs) > 0 {
+		return r, fmt.Errorf(strings.Join(errs, " :: "))
+	}
+	// Gather all the query results
+	for res := range resCh {
+		queryResults = append(queryResults, res)
+	}
+	if len(queryResults) == 1 { // no need to merge if there is only one item
+		return queryResults[0], nil
+	}
+	// Merge the query results into a single seriesSet
+	r, err = Merge(e, queryResults...)
+	return r, err
+
+}
+
+func getCloudwatchData(e *State, req *cloudwatch.Request) (resp cloudwatch.Response, err error) {
+	e.cloudwatchQueries = append(e.cloudwatchQueries, *req)
+
+	key := req.CacheKey()
+
+	getFn := func() (interface{}, error) {
+
+		d := parseDimensions(req.DimensionString)
+
+		if hasWildcardDimension(req.DimensionString) {
+			lr := cloudwatch.LookupRequest{
+				Region:     req.Region,
+				Namespace:  req.Namespace,
+				Metric:     req.Metric,
+				Dimensions: d,
+				Profile:    req.Profile,
+			}
+			d, err = e.CloudWatchContext.LookupDimensions(&lr)
+			if err != nil {
+				return resp, err
+			}
+			if len(d) == 0 {
+				return resp, fmt.Errorf("Wildcard dimension did not match any cloudwatch metrics in region %s", req.Region)
+			}
+		}
+		req.Dimensions = d
+		return e.CloudWatchContext.Query(req)
+	}
+
+	var val interface{}
+	var hit bool
+	val, err, hit = e.Cache.Get(key, getFn)
+	collectCacheHit(e.Cache, "cloudwatch", hit)
+	resp = val.(cloudwatch.Response)
+
 	return
 }
 

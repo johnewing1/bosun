@@ -21,6 +21,7 @@ var (
 	context Context
 )
 
+const DefaultConcurrency = 4
 const DefaultPageLimit = 10
 const DefaultExpansionLimit = 500
 
@@ -30,15 +31,16 @@ var ErrInvalidPeriod = errors.New("Period must be greater than 0")
 
 // Request holds query objects. Currently only absolute times are supported.
 type Request struct {
-	Start      *time.Time
-	End        *time.Time
-	Region     string
-	Namespace  string
-	Metric     string
-	Period     int64
-	Statistic  string
-	Dimensions [][]Dimension
-	Profile    string
+	Start           *time.Time
+	End             *time.Time
+	Region          string
+	Namespace       string
+	Metric          string
+	Period          int64
+	Statistic       string
+	DimensionString string
+	Dimensions      [][]Dimension
+	Profile         string
 }
 type LookupRequest struct {
 	Region     string
@@ -101,6 +103,7 @@ type Context interface {
 	LookupDimensions(request *LookupRequest) ([][]Dimension, error)
 	GetExpansionLimit() int
 	GetPagesLimit() int
+	GetConcurrency() int
 }
 
 type cloudWatchContext struct {
@@ -109,6 +112,7 @@ type cloudWatchContext struct {
 	profilesLock    sync.RWMutex
 	ExpansionLimit  int
 	PagesLimit      int
+	Concurrency     int
 }
 
 type ProfileProvider interface {
@@ -182,6 +186,15 @@ func (c *cloudWatchContext) GetExpansionLimit() int {
 	}
 }
 
+func (c *cloudWatchContext) GetConcurrency() int {
+	if c.Concurrency == 0 {
+		return DefaultConcurrency
+	} else {
+		return c.Concurrency
+
+	}
+}
+
 func GetContext() Context {
 	return GetContextWithProvider(profileProvider{})
 }
@@ -249,6 +262,7 @@ func (c cloudWatchContext) Query(r *Request) (Response, error) {
 	var id string
 
 	api := c.getProfile(r.Profile, r.Region)
+
 	if r.Period <= 0 {
 		return response, ErrInvalidPeriod
 	}
@@ -286,6 +300,7 @@ func (c cloudWatchContext) Query(r *Request) (Response, error) {
 	response.Raw = *resp
 	response.TagSet = tagSet
 	return response, nil
+
 }
 
 func match(d *cw.Dimension, wc Wildcards) bool {

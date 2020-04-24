@@ -298,6 +298,7 @@ type CloudWatchConf struct {
 	Enabled        bool
 	ExpansionLimit int
 	PagesLimit     int
+	Concurrency    int
 }
 
 func (c CloudWatchConf) Valid() error {
