@@ -92,7 +92,7 @@ func (r *Request) CacheKey() string {
 		r.Metric,
 		r.Period,
 		r.Statistic,
-		r.Dimensions,
+		r.DimensionString,
 		r.Profile,
 	)
 }

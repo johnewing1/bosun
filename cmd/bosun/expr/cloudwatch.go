@@ -221,7 +221,6 @@ func getCloudwatchData(e *State, req *cloudwatch.Request) (resp cloudwatch.Respo
 	e.cloudwatchQueries = append(e.cloudwatchQueries, *req)
 
 	key := req.CacheKey()
-
 	getFn := func() (interface{}, error) {
 
 		d := parseDimensions(req.DimensionString)
@@ -249,6 +248,7 @@ func getCloudwatchData(e *State, req *cloudwatch.Request) (resp cloudwatch.Respo
 	var val interface{}
 	var hit bool
 	val, err, hit = e.Cache.Get(key, getFn)
+
 	collectCacheHit(e.Cache, "cloudwatch", hit)
 	resp = val.(cloudwatch.Response)
 
